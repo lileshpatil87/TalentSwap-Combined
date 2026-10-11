@@ -1,0 +1,1 @@
+export { GamificationPage } from "./GamificationPage";

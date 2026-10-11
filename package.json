@@ -1,0 +1,51 @@
+{
+  "name": "talentswap",
+  "private": true,
+  "version": "0.0.0",
+  "description": "TalentSwap — points-based skill exchange platform. pnpm/Turborepo monorepo per Architecture Foundation v1.1 §2.",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint -- --fix",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "check:boundaries": "ts-node scripts/check-boundaries.ts",
+    "generate:module": "ts-node scripts/generate-module.ts",
+    "seed:db": "ts-node scripts/seed-db.ts",
+    "validate:frontend": "node scripts/validate-frontend.mjs",
+    "validate:pwa": "node scripts/validate-pwa.mjs",
+    "validate:sequence": "node scripts/validate-module-sequence.mjs",
+    "validate": "pnpm validate:sequence && pnpm validate:frontend && pnpm validate:pwa && pnpm validate:acceptance",
+    "validate:acceptance": "node scripts/validate-acceptance.mjs",
+    "test:source": "node scripts/test-source.mjs",
+    "dev:web": "pnpm --filter @talentswap/web dev",
+    "dev:api": "pnpm --filter @talentswap/api start:dev",
+    "infra:up": "docker compose up -d postgres redis",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f postgres redis",
+    "db:generate": "pnpm --filter @talentswap/api prisma:generate",
+    "db:migrate": "pnpm --filter @talentswap/api prisma:migrate:deploy",
+    "db:seed": "pnpm --filter @talentswap/api prisma:seed",
+    "db:setup": "pnpm db:generate && pnpm db:migrate && pnpm db:seed"
+  },
+  "ts-node": {
+    "project": "scripts/tsconfig.json",
+    "transpileOnly": true
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0",
+    "prettier": "^3.3.0",
+    "prettier-plugin-tailwindcss": "^0.6.0",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.14.15"
+  }
+}

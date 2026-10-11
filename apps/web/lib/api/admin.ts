@@ -1,0 +1,2 @@
+import type { AdminMetrics, DocumentItem, Exchange, UserSummary } from "@talentswap/types"; import { apiRequest } from "@/lib/api";
+export const adminApi={users:()=>apiRequest<UserSummary[]>("/admin/users"),ban:(id:string)=>apiRequest<void>(`/admin/users/${id}/ban`,{method:"PATCH"}),documents:()=>apiRequest<DocumentItem[]>("/admin/documents/queue"),flaggedTransactions:()=>apiRequest<Exchange[]>("/admin/transactions/flagged"),analytics:()=>apiRequest<AdminMetrics>("/admin/analytics/dashboard")};

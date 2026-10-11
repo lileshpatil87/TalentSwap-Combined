@@ -1,0 +1,1 @@
+import type { NotificationItem } from "@talentswap/types"; import { apiRequest } from "@/lib/api"; export const notificationsApi={list:()=>apiRequest<NotificationItem[]>("/notifications"),read:(id:string)=>apiRequest<void>(`/notifications/${id}/read`,{method:"PATCH"}),readAll:()=>apiRequest<void>("/notifications/read-all",{method:"PATCH"})};

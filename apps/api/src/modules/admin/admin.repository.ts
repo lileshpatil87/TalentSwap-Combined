@@ -1,0 +1,1 @@
+import { Injectable } from '@nestjs/common'; import { PrismaService } from '@app/database/prisma.service'; @Injectable() export class AdminRepository{constructor(private readonly prisma:PrismaService){} log(data:any){return this.prisma.adminLog.create({data});}}

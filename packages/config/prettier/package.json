@@ -1,0 +1,10 @@
+{
+  "name": "@talentswap/prettier-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.json",
+  "files": ["index.json"],
+  "peerDependencies": {
+    "prettier-plugin-tailwindcss": "^0.6.0"
+  }
+}

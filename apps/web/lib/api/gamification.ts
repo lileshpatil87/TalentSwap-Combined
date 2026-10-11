@@ -1,0 +1,1 @@
+import type { GamificationSnapshot } from "@talentswap/types"; import { apiRequest } from "@/lib/api"; export const gamificationApi={snapshot:()=>apiRequest<GamificationSnapshot>("/gamification/me")};

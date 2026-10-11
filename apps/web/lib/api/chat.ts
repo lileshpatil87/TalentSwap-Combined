@@ -1,0 +1,1 @@
+import type { ChatMessage,Conversation } from "@talentswap/types"; import { apiRequest } from "@/lib/api"; export const chatApi={conversations:()=>apiRequest<Conversation[]>("/conversations"),messages:(id:string)=>apiRequest<ChatMessage[]>(`/conversations/${id}/messages`)};

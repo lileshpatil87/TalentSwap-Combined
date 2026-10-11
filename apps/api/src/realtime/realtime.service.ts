@@ -1,0 +1,2 @@
+import { Injectable } from '@nestjs/common'; import type { Server } from 'socket.io';
+@Injectable() export class RealtimeService { private server?:Server; setServer(server:Server){this.server=server;} emitToUser(userId:string,event:string,payload:unknown){this.server?.to(`user:${userId}`).emit(event,payload);} emitToRoom(room:string,event:string,payload:unknown){this.server?.to(room).emit(event,payload);} joinUser(socket:any,userId:string){socket.join(`user:${userId}`);} }

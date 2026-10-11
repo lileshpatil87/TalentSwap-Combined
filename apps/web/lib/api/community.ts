@@ -1,0 +1,2 @@
+import type { CommunityPost } from "@talentswap/types"; import type { CommunityPostInput } from "@talentswap/validation"; import { apiRequest } from "@/lib/api";
+export const communityApi={list:()=>apiRequest<CommunityPost[]>("/community/posts"),create:(body:CommunityPostInput)=>apiRequest<CommunityPost>("/community/posts",{method:"POST",body}),remove:(id:string)=>apiRequest<void>(`/community/posts/${id}`,{method:"DELETE"})};

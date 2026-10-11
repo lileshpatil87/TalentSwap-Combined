@@ -1,0 +1,2 @@
+import { Module } from '@nestjs/common'; import { PrismaModule } from '@app/database/prisma.module'; import { WALLET_REPOSITORY } from './wallet.constants'; import { WalletController } from './wallet.controller'; import { PrismaWalletRepository } from './wallet.repository'; import { WalletService } from './wallet.service';
+@Module({imports:[PrismaModule],controllers:[WalletController],providers:[WalletService,{provide:WALLET_REPOSITORY,useClass:PrismaWalletRepository}],exports:[WalletService]}) export class WalletModule{}

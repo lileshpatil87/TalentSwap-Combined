@@ -1,0 +1,1 @@
+import { apiRequest } from "@/lib/api"; export interface CallingSession { channel:string; token:string; appId:string; expiresAt:string; } export const callingApi={start:(exchangeId:string)=>apiRequest<CallingSession>(`/calls/${exchangeId}`,{method:"POST"})};

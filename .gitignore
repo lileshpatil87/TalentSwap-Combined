@@ -1,0 +1,62 @@
+# .gitignore (repository root)
+# Applies globally so any app added later inherits protection automatically
+# (Architecture Foundation §8.4, DEV-CON-v1.0 §7.2).
+# Merged 2026-08-08 from the DevOps and Frontend foundation deliveries,
+# which had independently authored slightly different versions of this
+# file — union of both, no content lost.
+
+# --- Environment / secrets — never committed ---
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+
+# --- Dependencies ---
+node_modules/
+.pnpm-store/
+
+# --- Build output ---
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# --- Turborepo ---
+.turbo/
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Test / coverage ---
+coverage/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# --- Vercel ---
+.vercel
+
+# --- Terraform (infrastructure/terraform — dormant until Roadmap Phase 4,
+#     DEV-CON-v1.0 §25.4; added ahead of need so state is never
+#     accidentally committed once INFRA-08 actually activates this dir) ---
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+apps/api/private-dev.pem
+apps/api/public-dev.pem
+apps/api/.env
+apps/worker/.env
+DB/.env

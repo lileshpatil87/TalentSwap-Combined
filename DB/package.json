@@ -1,0 +1,27 @@
+{
+  "name": "talentswap-db",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TalentSwap cumulative PostgreSQL database delivery: DB-03 through DB-17.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "db:install": "pnpm install",
+    "db:generate": "pnpm --dir apps/api exec prisma generate",
+    "db:validate": "pnpm --dir apps/api exec prisma validate",
+    "db:migrate": "pnpm --dir apps/api exec prisma migrate deploy",
+    "db:seed": "pnpm --dir apps/api exec prisma db seed",
+    "verify:db:static": "node scripts/verify-db-static.mjs",
+    "test:db": "bash scripts/run-db-tests.sh",
+    "verify:db": "node scripts/verify-release.mjs",
+    "db:up": "docker compose -f docker-compose.db.yml up -d",
+    "db:down": "docker compose -f docker-compose.db.yml down -v",
+    "db:logs": "docker compose -f docker-compose.db.yml logs -f postgres",
+    "db:bootstrap": "pnpm db:generate && pnpm db:migrate && pnpm db:seed",
+    "db:full-test": "pnpm verify:db && pnpm test:db",
+    "run-all-db-validation": "bash scripts/run-all-db-validation.sh",
+    "db:full-test-docker": "docker compose -f docker-compose.db.yml --profile test run --rm db-test"
+  }
+}

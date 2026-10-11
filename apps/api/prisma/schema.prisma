@@ -1,0 +1,647 @@
+// TalentSwap — Prisma Schema
+//
+// Per Architecture Foundation §17.2 step 2 / DB-CON-v1.0 §4: every domain
+// module appends its own models below, namespaced under its own
+// `// === <module> module ===` comment block, in an append-only fashion —
+// a module's block is never reordered, split, or interleaved with
+// another module's block by a later PR. Migrations are generated
+// (`prisma migrate dev`), never hand-edited after being applied anywhere.
+//
+// Module delivery log (see docs/database/ for each module's hand-off
+// notes):
+//   - Foundation (infra only — PrismaService, TransactionHelper, health
+//     indicators; no models) — this file was a placeholder until the
+//     delivery below.
+//   - "DB-02 — Core Database Schema" (this delivery, 2026-08-09): adds
+//     `users`, `refresh_tokens` (ADR-0003), and `profiles` (ADR-0004).
+//     NAMING NOTE, documented in full in
+//     docs/database/DB-02-implementation-notes.md: per the Master
+//     Development Plan §3.3 domain registry and DB-CON-v1.0 §5's domain
+//     matrix, `users`/`refresh_tokens` are properly "DB-01 — Users & Auth
+//     Schema" and `profiles` is "DB-02 — Profiles Schema". The module
+//     actually labeled `DB-01` in this repository's history only ever
+//     delivered database *infrastructure* (Architecture Foundation
+//     Roadmap #0 scope — see docs/database/DB-01-merge-notes.md /
+//     DB-01-reconciliation.md and docs/architecture/MERGE_NOTES.md §4,
+//     which already flagged this exact module-ID mismatch), never the
+//     `users`/`refresh_tokens` schema. Since `profiles.user_id` is a
+//     mandatory 1:1 foreign key into `users` (DB-CON-v1.0 §23), the
+//     `profiles` table cannot exist without `users` existing first —
+//     so this "DB-02 — Core Database Schema" session delivers both,
+//     flagged here for Jacob/Erwin per AI SDLC governance rather than
+//     silently resolved.
+//
+//   Still to come from future modules, appended the same way:
+//   - `skills`/`skill_categories` (DB-03), `skill_points_ledger` +
+//     `trg_sync_skill_points` trigger (DB-04), `transactions` (DB-05),
+//     and so on per Architecture Foundation §16 / Master Development
+//     Plan §2.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// === users module ═══════════════════════════════════════════════════
+// Owner: `users` (account state, role, ban status). The `auth` module has
+// a documented exception to read/write this table directly for identity
+// operations (Architecture Foundation §3.1 `auth` row) — every other
+// module reaches user data only through `users`'/`profiles`' injected
+// public service, never a direct Prisma query (Architecture Foundation
+// §4.2/§4.3, DB-CON-v1.0 §5, enforced by `scripts/check-boundaries.ts`
+// once FOUND-08 ships).
+//
+// Implements: Technology Specification §4.1.1 (table catalogue);
+// DB-CON-v1.0 §5 (domain matrix, "DB-01" row), §7–16 (naming, keys,
+// timestamps).
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Platform account role (Technology Specification §4.1.1). Member
+/// casing is UPPER_SNAKE_CASE per Architecture Foundation §5.2 / DB-CON
+/// -v1.0 §9 — this supersedes the Specification's illustrative lowercase
+/// example (`'user' | 'verified_user' | 'moderator' | 'admin'`); the
+/// underlying values and meaning are unchanged, only the casing.
+enum UserRole {
+  USER
+  VERIFIED_USER
+  MODERATOR
+  ADMIN
+
+  @@map("user_role")
+}
+
+/// Core identity record (Technology Specification §4.1.1).
+model User {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  email String @unique @db.VarChar(255)
+
+  /// bcrypt hash, cost factor 12 (Technology Specification §4.1.1, §8.2).
+  /// Nullable for OAuth-only accounts.
+  ///
+  /// CONFLICT RESOLVED (DB-CON-v1.0 §6 conflict-resolution discipline):
+  /// the Specification's own table states this column's constraint as
+  /// `NOT NULL` while the same row's description says "NULL for
+  /// OAuth-only accounts" — a self-contradiction within Technology
+  /// Specification §4.1.1 itself, not a conflict between documents.
+  /// Resolved in favor of nullable: OAuth login via Google/LinkedIn
+  /// (Architecture Foundation §2.2.4, §13; Technology Specification
+  /// §8.2) is an approved, first-class authentication pathway with no
+  /// password, so a `NOT NULL` constraint here would make OAuth-only
+  /// registration structurally impossible at the schema level.
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+
+  role UserRole @default(USER)
+
+  /// Renamed from the Specification's literal `email_verified` to
+  /// `is_email_verified` to comply with DB-CON-v1.0 §10's binding
+  /// boolean-prefix rule ("Boolean fields are prefixed is/has ...
+  /// applied to persisted booleans as well as in-memory ones"). The
+  /// Specification's own catalogue is internally inconsistent here —
+  /// `is_banned` on this same table is already prefixed, `email_verified`
+  /// was not. No meaning changes, only the column name.
+  isEmailVerified Boolean @default(false) @map("is_email_verified")
+
+  /// Soft-ban flag (DB-CON-v1.0 §17 decision matrix: "Ban flag, not
+  /// deletion" — banning is an authorization decision, not a
+  /// data-lifecycle one; the row and everything referencing it stays
+  /// intact).
+  isBanned Boolean @default(false) @map("is_banned")
+
+  oauthProvider String? @map("oauth_provider") @db.VarChar(50)
+
+  /// Unique per DB-CON-v1.0 §30; Postgres's standard unique-constraint
+  /// semantics permit multiple NULLs (users who never linked an OAuth
+  /// account) — never worked around with a sentinel non-null value.
+  oauthId String? @unique @map("oauth_id") @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  refreshTokens RefreshToken[]
+  profile       Profile?
+  skills        Skill[]
+  initiatedTransactions Transaction[] @relation("TransactionInitiator")
+  providedTransactions Transaction[] @relation("TransactionProvider")
+  ledgerEntries SkillPointsLedger[]
+  notifications Notification[]
+  messages Message[]
+  documents Document[]
+  ratingsGiven Rating[] @relation("RatingRater")
+  ratingsReceived Rating[] @relation("RatingRatee")
+  userBadges UserBadge[]
+  activityStreak ActivityStreak?
+  matchSuggestions MatchSuggestion[] @relation("MatchUser")
+  candidateSuggestions MatchSuggestion[] @relation("MatchCandidate")
+  callsInitiated CallSession[]
+  communityPosts CommunityPost[]
+  adminLogs AdminLog[]
+
+  @@map("users")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// === auth module ═══════════════════════════════════════════════════
+// Owner: `auth` (ADR-0003). Sole write surface for this table — no other
+// module ever creates, revokes, or rotates a refresh token directly.
+//
+// Implements: ADR-0003 (Architecture Foundation §3.1 `auth` row, §18
+// Amendment Log); DB-CON-v1.0 §5 (domain matrix, "DB-01" row), §14
+// (composite-index example), §26 (cascade example).
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Refresh-token rotation and family tracking (ADR-0003). `family_id`
+/// groups every token descended from one original login; presenting an
+/// already-rotated (superseded) token indicates theft/replay and the
+/// `auth` module is expected to invalidate the entire family when that
+/// happens (Technology Specification §8.2) — that reaction is `auth`'s
+/// business logic and is out of this schema module's scope; the schema
+/// only provides the columns/indexes that make the family lookup and the
+/// reuse check possible.
+model RefreshToken {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The token itself is never stored in plaintext (DB-CON-v1.0 §39) —
+  /// only its hash. The plaintext value exists only transiently in the
+  /// httpOnly Secure cookie (Architecture Foundation §2.2.4).
+  tokenHash String @unique @map("token_hash") @db.VarChar(255)
+
+  familyId String @map("family_id") @db.Uuid
+
+  isRevoked Boolean @default(false) @map("is_revoked")
+
+  /// Self-reference to the token that superseded this one on rotation.
+  /// `SET NULL` on delete: a weak, optional reference per DB-CON-v1.0
+  /// §26 — the row that replaced it stays meaningful even if that later
+  /// row is ever removed.
+  replacedByTokenId String?        @map("replaced_by_token_id") @db.Uuid
+  replacedByToken   RefreshToken?  @relation("RefreshTokenReplacement", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replacedTokens    RefreshToken[] @relation("RefreshTokenReplacement")
+
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  /// No `updated_at`: ADR-0003 enumerates this table's required columns
+  /// exhaustively (`id, user_id, token_hash, family_id, is_revoked,
+  /// replaced_by_token_id, expires_at, created_at`) and does not include
+  /// one. `is_revoked`'s mutation is not tracked via an update-timestamp
+  /// on this row — rotation creates a new row rather than mutating this
+  /// one's core fields.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// Composite index per ADR-0003 — family lookup and reuse-detection
+  /// scan (leading column `user_id` is the equality filter, per
+  /// DB-CON-v1.0 §29's composite-ordering rule).
+  @@index([userId, familyId])
+  /// Expiry-scan index per ADR-0003 — this column exists specifically to
+  /// be scanned by a future cleanup job (DB-CON-v1.0 §16).
+  @@index([expiresAt])
+  /// Foreign-key support index (DB-CON-v1.0 §13) — not covered by the
+  /// composite index above, which does not lead with this column.
+  @@index([replacedByTokenId])
+  @@map("refresh_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// === profiles module ═══════════════════════════════════════════════
+// Owner: `profiles` (display identity, reputation, gamification tier
+// exposure). Direct ledger writes are forbidden here — those go through
+// `wallet` (Architecture Foundation §3.1 `profiles` row).
+//
+// Implements: Technology Specification §4.1.2; ADR-0004; DB-CON-v1.0 §5
+// (domain matrix, "DB-02" row), §23 (one-to-one example), §31/§43
+// (skill_points CHECK + write-path rule).
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Gamification tier (Technology Specification §4.1.2; Proposal §6.2).
+/// UPPER_SNAKE_CASE members per Architecture Foundation §5.2 / DB-CON-v1.0
+/// §9, superseding the Specification's lowercase illustrative example.
+enum ExperienceLevel {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  CHAMPION
+
+  @@map("experience_level")
+}
+
+/// Public-facing profile, 1:1 with `users` (Technology Specification
+/// §4.1.2; DB-CON-v1.0 §23 — this is that section's own canonical
+/// one-to-one example).
+///
+/// `skill_points` has exactly one write path, and it is NOT application
+/// code (ADR-0004): the future `DB-04`/`wallet` module's
+/// `trg_sync_skill_points` `AFTER INSERT` trigger on
+/// `skill_points_ledger` is this column's sole writer. This module
+/// creates the column and its `CHECK (skill_points >= 0)` backstop only
+/// — the trigger itself does not exist yet (out of this module's scope
+/// per DB-CON-v1.0 §5's domain matrix: it ships with `DB-04`). Until
+/// `DB-04` ships, every profile's `skill_points` simply holds its
+/// default of `0`. The future `BE-03` (`profiles` module) build must
+/// ensure `profiles.repository.ts`'s update method's input type
+/// structurally excludes `skill_points` (ADR-0004) — noted here as a
+/// dependency for that future session, not implemented by this one.
+model Profile {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  userId String @unique @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName String @map("display_name") @db.VarChar(100)
+
+  bio String? @db.Text
+
+  avatarUrl String? @map("avatar_url") @db.VarChar(500)
+
+  /// City/region granularity only — no precise coordinates are ever
+  /// stored (Technology Specification §8.3 data-minimization).
+  location String? @db.VarChar(150)
+
+  /// See the model-level doc comment above and ADR-0004. No module —
+  /// this one included — ever issues a direct `UPDATE` against this
+  /// column. Backstopped at the database layer by a `CHECK` constraint
+  /// added via raw SQL in this module's migration (DB-CON-v1.0 §31;
+  /// Prisma Schema Language has no declarative `CHECK` syntax as of the
+  /// Prisma version pinned in this project — see the migration file's
+  /// own comment for detail).
+  skillPoints Int @default(0) @map("skill_points")
+
+  /// Bounded 0.00–5.00 (Technology Specification §4.1.2) — a
+  /// business-defined valid range, backstopped by a `CHECK` constraint
+  /// per DB-CON-v1.0 §31's "a rating 1–5" example applied to this
+  /// column's documented bounds.
+  reputationScore Decimal @default(0.00) @map("reputation_score") @db.Decimal(3, 2)
+
+  /// Denormalized counter (Technology Specification §4.1.2). Per
+  /// DB-CON-v1.0 §44, future modules increment this within the same
+  /// transaction as the completing event, not via a separate `COUNT(*)`
+  /// sweep — that increment logic belongs to the future `transactions`
+  /// module, not this schema module.
+  totalExchanges Int @default(0) @map("total_exchanges")
+
+  isVerified Boolean @default(false) @map("is_verified")
+
+  verificationBadge String? @map("verification_badge") @db.VarChar(50)
+
+  experienceLevel ExperienceLevel @default(BRONZE) @map("experience_level")
+
+  experiencePoints Int @default(0) @map("experience_points")
+
+  lastActiveAt DateTime? @map("last_active_at") @db.Timestamptz(6)
+  embedding Unsupported("vector")?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  /// Match-ranking / leaderboard query support (Technology Specification
+  /// §4.2).
+  @@index([reputationScore(sort: Desc)])
+  /// Activity-based filtering and streak calculation support (Technology
+  /// Specification §4.2).
+  @@index([lastActiveAt])
+  @@map("profiles")
+}
+
+// === BE-05 skills module ===
+enum SkillProficiency {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+  @@map("skill_proficiency")
+}
+
+enum SkillType {
+  OFFERING
+  SEEKING
+  @@map("skill_type")
+}
+
+model SkillCategory {
+  id Int @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  parentId Int? @map("parent_id")
+  parent SkillCategory? @relation("SkillCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children SkillCategory[] @relation("SkillCategoryTree")
+  slug String @unique @db.VarChar(120)
+  icon String? @db.VarChar(255)
+  isActive Boolean @default(true) @map("is_active")
+  skills Skill[]
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@index([parentId])
+  @@index([isActive])
+  @@map("skill_categories")
+}
+
+model Skill {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId Int @map("category_id")
+  title String @db.VarChar(150)
+  description String @db.Text
+  proficiency SkillProficiency
+  type SkillType
+  pointRate Int @default(10) @map("point_rate")
+  embedding Unsupported("vector")?
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  category SkillCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions Transaction[]
+  @@index([userId, isActive])
+  @@index([categoryId, isActive])
+  @@map("skills")
+}
+
+// === BE-06 wallet / ledger module ===
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+  ESCROW_HOLD
+  ESCROW_RELEASE
+  ADMIN_ADJUSTMENT
+  @@map("ledger_entry_type")
+}
+
+model SkillPointsLedger {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transactionId String? @map("transaction_id") @db.Uuid
+  idempotencyKey String? @unique @map("idempotency_key") @db.Uuid
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  entryType LedgerEntryType @map("entry_type")
+  amount Int
+  balanceAfter Int @map("balance_after")
+  description String @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([transactionId])
+  @@map("skill_points_ledger")
+}
+
+// === BE-08/09 transactions module ===
+enum TransactionType {
+  ONE_WAY
+  TWO_WAY
+  @@map("transaction_type")
+}
+
+enum TransactionStatus {
+  PENDING
+  ESCROW_HELD
+  PROVIDER_CONFIRMED
+  RECIPIENT_CONFIRMED
+  COMPLETED
+  DISPUTED
+  CANCELLED
+  @@map("transaction_status")
+}
+
+model Transaction {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  initiatorId String @map("initiator_id") @db.Uuid
+  providerId String @map("provider_id") @db.Uuid
+  skillId String @map("skill_id") @db.Uuid
+  initiator User @relation("TransactionInitiator", fields: [initiatorId], references: [id], onDelete: Restrict)
+  provider User @relation("TransactionProvider", fields: [providerId], references: [id], onDelete: Restrict)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  ledgerEntries SkillPointsLedger[]
+  type TransactionType
+  pointsHeld Int @map("points_held")
+  status TransactionStatus @default(PENDING)
+  providerConfirmed Boolean @default(false) @map("provider_confirmed")
+  recipientConfirmed Boolean @default(false) @map("recipient_confirmed")
+  confirmationDeadline DateTime @map("confirmation_deadline") @db.Timestamptz(6)
+  idempotencyKey String @unique @map("idempotency_key") @db.Uuid
+  notes String? @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  @@index([initiatorId, status])
+  @@index([providerId, status])
+  @@index([confirmationDeadline])
+  @@map("transactions")
+}
+
+// === BE-11 notifications ===
+enum NotificationType {
+  TRANSACTION
+  CHAT_MESSAGE
+  BADGE_AWARDED
+  DOCUMENT_UPDATE
+  SYSTEM
+  MATCH
+  COMMUNITY
+  CALL
+  @@map("notification_type")
+}
+
+model Notification {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type NotificationType
+  payload Json
+  isRead Boolean @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([userId, isRead])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// === BE-12 chat ===
+model Conversation {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  participantIds String[] @map("participant_ids")
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  messages Message[]
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model Message {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String @map("conversation_id") @db.Uuid
+  senderId String @map("sender_id") @db.Uuid
+  sender User @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  content String @db.Text
+  isDeleted Boolean @default(false) @map("is_deleted")
+  sentAt DateTime @default(now()) @map("sent_at") @db.Timestamptz(6)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  @@index([conversationId, sentAt])
+  @@map("messages")
+}
+
+// === BE-14 documents ===
+enum DocumentStatus {
+  PENDING
+  SCANNING
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  @@map("document_status")
+}
+
+model Document {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileKey String @map("file_key") @db.VarChar(500)
+  fileType String @map("file_type") @db.VarChar(100)
+  originalName String @map("original_name") @db.VarChar(255)
+  status DocumentStatus @default(PENDING)
+  scanResult Json? @map("scan_result")
+  reviewedBy String? @map("reviewed_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@index([userId, status])
+  @@map("documents")
+}
+
+// === BE-15 ratings ===
+model Rating {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  raterId String @map("rater_id") @db.Uuid
+  rateeId String @map("ratee_id") @db.Uuid
+  rater User @relation("RatingRater", fields: [raterId], references: [id], onDelete: Restrict)
+  ratee User @relation("RatingRatee", fields: [rateeId], references: [id], onDelete: Restrict)
+  rating Int
+  feedbackText String? @map("feedback_text") @db.Text
+  transactionId String @map("transaction_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@unique([transactionId, raterId])
+  @@index([rateeId, createdAt(sort: Desc)])
+  @@map("ratings")
+}
+
+// === BE-16/17 gamification ===
+model Badge {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code String @unique @db.VarChar(100)
+  name String @db.VarChar(150)
+  description String @db.Text
+  iconUrl String? @map("icon_url") @db.VarChar(500)
+  xpReward Int @default(0) @map("xp_reward")
+  conditionType String @map("condition_type") @db.VarChar(100)
+  conditionValue Int @map("condition_value")
+  userBadges UserBadge[]
+  @@map("badges")
+}
+
+model UserBadge {
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId String @map("badge_id") @db.Uuid
+  awardedAt DateTime @default(now()) @map("awarded_at") @db.Timestamptz(6)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  @@id([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+model ActivityStreak {
+  userId String @id @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak Int @default(0) @map("current_streak")
+  longestStreak Int @default(0) @map("longest_streak")
+  lastActiveDate DateTime? @map("last_active_date") @db.Date
+  @@map("activity_streaks")
+}
+
+// === BE-18/19 matching ===
+model MatchSuggestion {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  candidateUserId String @map("candidate_user_id") @db.Uuid
+  user User @relation("MatchUser", fields: [userId], references: [id], onDelete: Cascade)
+  candidateUser User @relation("MatchCandidate", fields: [candidateUserId], references: [id], onDelete: Cascade)
+  score Decimal @db.Decimal(6,5)
+  reason Json?
+  generatedAt DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+  @@unique([userId, candidateUserId])
+  @@index([userId, score(sort: Desc)])
+  @@map("match_suggestions")
+}
+
+// === BE-20 calling ===
+enum CallStatus {
+  RINGING
+  ACTIVE
+  ENDED
+  FAILED
+  @@map("call_status")
+}
+
+model CallSession {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  initiatorId String @map("initiator_id") @db.Uuid
+  initiator User @relation(fields: [initiatorId], references: [id], onDelete: Restrict)
+  participantIds String[] @map("participant_ids")
+  channelName String @map("channel_name") @db.VarChar(255)
+  status CallStatus @default(RINGING)
+  startedAt DateTime? @map("started_at") @db.Timestamptz(6)
+  endedAt DateTime? @map("ended_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([initiatorId, status])
+  @@map("call_sessions")
+}
+
+// === BE-21 community ===
+enum CommunityPostType {
+  REQUEST
+  OFFER
+  EVENT
+  @@map("community_post_type")
+}
+
+model CommunityPost {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId String @map("author_id") @db.Uuid
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title String @db.VarChar(200)
+  body String @db.Text
+  postType CommunityPostType @map("post_type")
+  skillCategoryId Int? @map("skill_category_id")
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([skillCategoryId, isActive])
+  @@map("community_posts")
+}
+
+// === BE-23 admin ===
+model AdminLog {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId String @map("admin_id") @db.Uuid
+  admin User @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  action String @db.VarChar(100)
+  targetType String @map("target_type") @db.VarChar(100)
+  targetId String @map("target_id") @db.VarChar(255)
+  metadata Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([adminId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@map("admin_logs")
+}
+
+// === BE-24 worker idempotency ===
+model WorkerJobReceipt {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId String @unique @map("job_id") @db.VarChar(255)
+  queueName String @map("queue_name") @db.VarChar(100)
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+  @@index([queueName, processedAt])
+  @@map("worker_job_receipts")
+}

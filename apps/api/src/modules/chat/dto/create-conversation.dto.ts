@@ -1,0 +1,1 @@
+import { z } from 'zod'; import { createZodDto } from '@app/common/utils/zod-dto.util'; export const createConversationSchema=z.object({participantIds:z.array(z.string().uuid()).min(1).max(20)}).strict(); export class CreateConversationDto extends createZodDto(createConversationSchema){}

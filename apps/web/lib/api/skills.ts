@@ -1,0 +1,2 @@
+import type { Skill } from "@talentswap/types"; import type { SkillInput } from "@talentswap/validation"; import { apiRequest } from "@/lib/api";
+export const skillsApi={list:(query="")=>apiRequest<Skill[]>(`/skills${query}`),create:(body:SkillInput)=>apiRequest<Skill>("/skills",{method:"POST",body}),update:(id:string,body:SkillInput)=>apiRequest<Skill>(`/skills/${id}`,{method:"PATCH",body}),remove:(id:string)=>apiRequest<void>(`/skills/${id}`,{method:"DELETE"})};

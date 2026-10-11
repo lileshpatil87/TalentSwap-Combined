@@ -1,0 +1,71 @@
+// NOTE (BE-02, corrected during the DEV-02/DB-02/FE-02/BE-02 merge — see
+// docs/architecture/RECONCILIATION-DEV02-DB02-FE02-BE02.md §4): the
+// monorepo root (FOUND-01) now exists, but this file deliberately still
+// inlines its compiler options rather than switching to
+// `"extends": "../../tsconfig.base.json"` — root's base config targets
+// `"module": "ESNext"` / `"moduleResolution": "Bundler"` (correct for
+// `apps/web`'s bundler-based build), which is not appropriate for this
+// CommonJS NestJS backend (`nest build`/`ts-node` both expect
+// `"module": "commonjs"`). Switching would be a real behavioral change,
+// not a mechanical one, so it is left as-is per "make the minimum change
+// necessary" rather than silently reworked here. The values below are
+// otherwise kept in sync with tsconfig.base.json §6.1's spirit.
+//
+// `@talentswap/types` and `@talentswap/validation` are NOT path-mapped
+// to their package source here (unlike `apps/web/tsconfig.json`), and
+// that is a deliberate correction, not an oversight: `apps/web`'s
+// tsconfig never sets `rootDir` (it's `noEmit: true`, bundler-resolved),
+// so mapping straight to `../../packages/*/src` is harmless there. This
+// file DOES set `rootDir`/`outDir` for a real `tsc` emit (`nest build`),
+// and TypeScript's `rootDir` requires every file pulled into the
+// compilation — including ones reached through a path alias — to live
+// under it. Mapping to `../../packages/*/src` (physically outside
+// `apps/api/`) therefore fails hard with `TS6059` on every file that
+// imports either package — this is exactly what the original BE-02
+// delivery shipped, and exactly what broke `pnpm typecheck`.
+//
+// The fix: `apps/api/package.json` already lists both packages as
+// `"workspace:*"` dependencies, so `pnpm install` symlinks
+// `node_modules/@talentswap/types` → `packages/types` (the same
+// mechanism every other external package, e.g. `@nestjs/common`,
+// already resolves through). Files resolved via `node_modules` —
+// symlinked or not — are exempt from `rootDir` checking, so plain
+// Node/TS module resolution finds them correctly with no `paths` entry
+// needed at all. Jest resolves the same two packages via its own
+// `moduleNameMapper` in `package.json` (relative to Jest's own
+// `rootDir: "src"` override there, not this file's `rootDir`) — that
+// mapping was double-checked against this same bug class during the
+// merge and is correct as shipped.
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./",
+    "baseUrl": "./",
+    "paths": {
+      "@app/*": ["src/*"]
+    },
+    "declaration": false,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

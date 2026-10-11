@@ -1,0 +1,22 @@
+{
+  "name": "@talentswap/worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "start:dev": "ts-node src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1",
+    "bullmq": "^5.12.12",
+    "dotenv": "^16.4.5",
+    "ioredis": "^5.4.1",
+    "typescript": "^5.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "ts-node": "^10.9.2"
+  }
+}

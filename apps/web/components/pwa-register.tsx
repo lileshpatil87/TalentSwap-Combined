@@ -1,0 +1,4 @@
+"use client";
+import { useEffect,useState } from "react"; import { Download } from "lucide-react"; import { Button } from "@/components/ui/button";
+export function PwaRegister(){const [event,setEvent]=useState<BeforeInstallPromptEvent|null>(null);useEffect(()=>{if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>undefined);const handler=(e:Event)=>{e.preventDefault();setEvent(e as BeforeInstallPromptEvent)};window.addEventListener("beforeinstallprompt",handler);return()=>window.removeEventListener("beforeinstallprompt",handler)},[]);if(!event)return null;return <Button className="fixed bottom-4 right-4 z-50 shadow-lg" variant="outline" size="sm" onClick={()=>{void event.prompt().then(()=>setEvent(null))}}><Download className="size-4"/>Install</Button>}
+interface BeforeInstallPromptEvent extends Event { prompt:()=>Promise<void>; userChoice:Promise<{outcome:"accepted"|"dismissed"}> }

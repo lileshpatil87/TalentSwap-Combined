@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  # packages/config has no package.json of its own — it's a namespace
+  # folder containing two separate publishable packages
+  # (@talentswap/eslint-config, @talentswap/prettier-config). "packages/*"
+  # alone does not match one level deeper, so it's listed explicitly here.
+  # Found + fixed 2026-08-08: `pnpm install` failed with
+  # ERR_PNPM_WORKSPACE_PKG_NOT_FOUND for @talentswap/eslint-config until
+  # this was added.
+  - "packages/config/*"

@@ -1,0 +1,1 @@
+import type { LedgerEntry,WalletSnapshot } from "@talentswap/types"; import { apiRequest } from "@/lib/api"; export const walletApi={balance:()=>apiRequest<WalletSnapshot>("/wallet/balance"),ledger:(query="")=>apiRequest<LedgerEntry[]>(`/wallet/ledger${query}`)};

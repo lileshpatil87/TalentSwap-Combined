@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Semantic CSS variables — the runtime mirror of the raw values in
+ * packages/ui-tokens/src/colors.ts (FE-CON §31). Tailwind classes and
+ * component code never reference a raw color; they reference the
+ * semantic name (`bg-primary`, not `bg-[hsl(243_75%_59%)]`) — FE-CON §32.
+ *
+ * IMPORTANT: if a value here changes, the matching value in
+ * packages/ui-tokens/src/colors.ts must change too — the token package is
+ * the source of truth; this file is its CSS-variable expression, since
+ * Tailwind's `theme.extend.colors` (tailwind.config.ts) needs the indirection
+ * through a CSS custom property to support runtime dark-mode switching via
+ * next-themes' class strategy.
+ */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+    --border: 214 32% 91%;
+    --ring: 243 75% 59%;
+
+    /* Domain-specific semantic colors — Arch §11.3 */
+    --color-points: 262 83% 58%;
+    --color-verified: 142 71% 35%;
+    --color-escrow: 38 92% 50%;
+
+    --radius: 0.5rem;
+    --font-sans: "Inter", system-ui, sans-serif;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --primary: 243 75% 66%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --destructive: 0 63% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 142 65% 45%;
+    --success-foreground: 222 47% 8%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 222 47% 8%;
+    --border: 217 33% 20%;
+    --ring: 243 75% 66%;
+
+    --color-points: 262 83% 68%;
+    --color-verified: 142 65% 45%;
+    --color-escrow: 38 92% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Visible focus ring, never suppressed with outline:none alone — FE-CON §39 */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+/* prefers-reduced-motion respected platform-wide — FE-CON §38 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

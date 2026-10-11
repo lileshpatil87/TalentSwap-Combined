@@ -1,0 +1,1 @@
+import { z } from 'zod'; import { createZodDto } from '@app/common/utils/zod-dto.util'; export const confirmStorageSchema=z.object({key:z.string().min(10).max(500)}).strict(); export class ConfirmStorageDto extends createZodDto(confirmStorageSchema){}

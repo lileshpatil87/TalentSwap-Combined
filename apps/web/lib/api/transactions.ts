@@ -1,0 +1,1 @@
+import type { Exchange } from "@talentswap/types"; import { apiRequest } from "@/lib/api"; export const transactionsApi={list:()=>apiRequest<Exchange[]>("/exchanges"),get:(id:string)=>apiRequest<Exchange>(`/exchanges/${id}`)};

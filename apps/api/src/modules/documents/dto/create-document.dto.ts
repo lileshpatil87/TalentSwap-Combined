@@ -1,0 +1,1 @@
+import { z } from 'zod'; import { createZodDto } from '@app/common/utils/zod-dto.util'; export const createDocumentSchema=z.object({fileKey:z.string().min(10).max(500),fileType:z.string().min(3).max(100),originalName:z.string().min(1).max(255)}).strict(); export class CreateDocumentDto extends createZodDto(createDocumentSchema){}

@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: talentswap-db-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-talentswap_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-talentswap_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - talentswap_pgdata:/var/lib/postgresql/data
+
+  db-test:
+    image: node:20-bookworm
+    profiles: ["test"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /workspace
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/talentswap_dev?schema=public
+      SEED_ADMIN_EMAIL: admin@talentswap.local
+      SEED_ADMIN_PASSWORD: change-me-before-seeding
+    volumes:
+      - ./:/workspace
+    command: >-
+      bash -lc "apt-get update >/dev/null && apt-get install -y --no-install-recommends postgresql-client >/dev/null
+      && npm install --prefix apps/api
+      && apps/api/node_modules/.bin/prisma generate --schema apps/api/prisma/schema.prisma
+      && apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma
+      && apps/api/node_modules/.bin/prisma db seed --schema apps/api/prisma/schema.prisma
+      && bash scripts/run-all-db-validation.sh"
+
+volumes:
+  talentswap_pgdata:

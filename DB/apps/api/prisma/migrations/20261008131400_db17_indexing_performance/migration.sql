@@ -1,0 +1,8 @@
+-- DB-17 — Final indexing and performance review gate.
+--
+-- This migration records the completed review boundary without changing the
+-- approved table design. Concrete index corrections found by the review are
+-- applied in the immediately following forward-only migration
+-- 20261008131500_db17_index_corrections.
+--
+-- No previous migration is rewritten. See docs/database/DB-17-performance-review.md.

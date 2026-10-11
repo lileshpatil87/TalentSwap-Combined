@@ -1,0 +1,24 @@
+{
+  "root": true,
+  "extends": [
+    "next/core-web-vitals",
+    "./node_modules/@talentswap/eslint-config/index.js"
+  ],
+  "plugins": ["react-hooks"],
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "@next/next/no-img-element": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["../../*"],
+            "message": "Relative imports may not cross a module boundary. Use the @/* alias instead (FE-CON-v1.0 §20)."
+          }
+        ]
+      }
+    ]
+  }
+}

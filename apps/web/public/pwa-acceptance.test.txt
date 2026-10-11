@@ -1,0 +1,6 @@
+FE-20 acceptance checklist:
+- manifest.json exists with 192x192 and 512x512 icons
+- service worker caches only public shell assets
+- authenticated/API requests are network-first and are not cached
+- offline navigation falls back to offline.html
+- beforeinstallprompt is handled by PwaRegister

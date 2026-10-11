@@ -1,0 +1,1 @@
+import { z } from 'zod'; import { createZodDto } from '@app/common/utils/zod-dto.util'; export const createRatingSchema=z.object({transactionId:z.string().uuid(),rating:z.number().int().min(1).max(5),feedbackText:z.string().max(5000).optional()}).strict(); export class CreateRatingDto extends createZodDto(createRatingSchema){}
