@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
+export const dynamic = "force-dynamic";
 
 export default async function PublicSkillsPage() {
   let skills: Awaited<ReturnType<typeof publicApi.skills>>["items"] = [];

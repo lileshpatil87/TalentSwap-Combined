@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
+export const dynamic = "force-dynamic";
 
 export default async function PublicProfilePage({ params }: { params: { id: string } }) {
   let profile;

@@ -3,6 +3,7 @@ import { apiRequest, ApiRequestError, NetworkError, configureApiAuth } from "@/l
 const mockResponse = (data: unknown, status = 200): Response =>
   ({
     status,
+    ok: status >= 200 && status < 300,
     json: () => Promise.resolve(data),
   }) as unknown as Response;
 
