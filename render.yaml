@@ -7,7 +7,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter @talentswap/api... build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm db:generate && pnpm --filter @talentswap/api... build
     startCommand: pnpm db:migrate && pnpm --filter @talentswap/api start:prod
     healthCheckPath: /health
     envVars:
@@ -53,7 +53,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @talentswap/web... build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @talentswap/web... build
     startCommand: pnpm --filter @talentswap/web start
     envVars:
       - key: NODE_ENV

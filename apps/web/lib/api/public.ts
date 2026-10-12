@@ -4,6 +4,19 @@ import { apiRequest } from "@/lib/api";
 export interface PublicSkillRecord {
   id: string; userId: string; title: string; description: string; category?: { name?: string } | null;
   proficiency: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT"; pointRate: number; isActive: boolean; type: "OFFERING" | "SEEKING";
+  user?: {
+    id?: string;
+    role?: string;
+    profile?: {
+      displayName?: string | null;
+      headline?: string | null;
+      location?: string | null;
+      avatarUrl?: string | null;
+      reputationScore?: number;
+      totalExchanges?: number;
+      isVerified?: boolean;
+    } | null;
+  } | null;
 }
 export interface PaginatedSkills { items: PublicSkillRecord[]; total: number; page: number; limit: number; totalPages: number; }
 
