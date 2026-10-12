@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PwaRegister } from "@/components/pwa-register";
 
 /**
@@ -32,6 +32,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+
+  useEffect(() => {
+    // Never allow private cached data from one account to bleed into another.
+    const clearPrivateCache = () => queryClient.clear();
+    window.addEventListener("talentswap:auth-changed", clearPrivateCache);
+    return () => window.removeEventListener("talentswap:auth-changed", clearPrivateCache);
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

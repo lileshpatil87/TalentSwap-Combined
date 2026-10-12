@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DocumentsRepository } from './documents.repository';
 import { QueueService } from '@app/cache/queue.service';
 import { StorageService } from '../storage/storage.service';
@@ -9,6 +9,8 @@ const ALLOWED_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'im
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     private readonly repo: DocumentsRepository,
     private readonly queue: QueueService,
@@ -19,8 +21,10 @@ export class DocumentsService {
   async create(userId: string, input: any) {
     if (!ALLOWED_TYPES.has(input.fileType)) throw new InvalidDocumentException();
     if (!input.fileKey.startsWith(`users/${userId}/`)) throw new DocumentAccessException();
+    let inspected: { size?: number };
     try {
-      await this.storage.inspectMagic(userId, input.fileKey, input.fileType);
+      const result = await this.storage.inspectMagic(userId, input.fileKey, input.fileType);
+      inspected = { ...(result.size !== undefined && { size: result.size }) };
     } catch {
       throw new InvalidDocumentException();
     }
@@ -30,12 +34,22 @@ export class DocumentsService {
       fileKey: input.fileKey,
       fileType: input.fileType,
       originalName: input.originalName,
+      sizeBytes: inspected.size ?? 0,
       status: 'SCANNING',
     });
-    const downloadUrl = await this.storage.presignRead(userId, d.fileKey);
-    await this.queue.addJob('document-scan', 'scan', { documentId: d.id, downloadUrl }, {
-      jobId: `document-scan:${d.id}`,
-    });
+    try {
+      await this.queue.addJob('document-scan', 'scan', { documentId: d.id, fileKey: d.fileKey }, {
+        jobId: `document-scan:${d.id}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 2_000 },
+      });
+    } catch (error) {
+      this.logger.error(`Unable to enqueue scan for document ${d.id}: ${error instanceof Error ? error.message : 'UNKNOWN'}`);
+      return this.repo.update(d.id, {
+        status: 'SCAN_FAILED',
+        scanResult: { engine: 'ClamAV', error: 'SCAN_QUEUE_UNAVAILABLE' },
+      });
+    }
     return d;
   }
 

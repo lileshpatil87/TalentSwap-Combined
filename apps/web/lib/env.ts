@@ -19,7 +19,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_API_BASE_URL: z.string().url().default("http://localhost:4000/api/v1"),
   NEXT_PUBLIC_SOCKET_URL: z.string().url().default("http://localhost:4000"),
   NEXT_PUBLIC_APP_ENV: z.enum(["development", "staging", "production"]).default("development"),
-  NEXT_PUBLIC_DEMO_FALLBACK: z.enum(["true", "false"]).default("true"),
+  NEXT_PUBLIC_DEMO_FALLBACK: z.enum(["true", "false"]).default("false"),
 });
 
 function loadEnv() {

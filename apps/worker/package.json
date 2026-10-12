@@ -6,14 +6,17 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node src/main.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "ts-node src/main.ts",
+    "test": "ts-node --transpile-only test/reliability.spec.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
     "bullmq": "^5.12.12",
     "dotenv": "^16.4.5",
     "ioredis": "^5.4.1",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "@aws-sdk/client-s3": "^3.654.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.15",

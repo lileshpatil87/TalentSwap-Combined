@@ -1,0 +1,42 @@
+name: Phase 4 release gate
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'infrastructure/phase4/**'
+      - '.github/workflows/phase4-deploy.yml'
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '9.0.0' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm validate
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: '1.9.8' }
+      - run: terraform -chdir=infrastructure/phase4/terraform-multiregion init -backend=false
+      - run: terraform -chdir=infrastructure/phase4/terraform-multiregion validate
+      - run: docker build --tag talentswap-sfu:ci -f infrastructure/mediasoup-sfu/Dockerfile infrastructure/mediasoup-sfu
+  # Production deployment is intentionally gated on repository-specific AWS
+  # environment configuration, OIDC trust, ECS services, and CodeDeploy groups.
+  deploy:
+    needs: validate
+    if: ${{ vars.TALENTSWAP_ECS_DEPLOY_ENABLED == 'true' }}
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Configure OIDC role, ECR repositories, ECS task definitions, and CodeDeploy blue/green deployment for this AWS account."

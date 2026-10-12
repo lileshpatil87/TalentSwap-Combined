@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { WalletService } from '../wallet/wallet.service';
 
 import type { Role } from '@talentswap/types';
 
@@ -41,6 +42,10 @@ export interface AuthSessionResult {
 export class AuthService {
   private readonly logger = new Logger(AUTH_LOG_CONTEXT);
 
+  @Optional()
+  @Inject(WalletService)
+  private readonly wallet?: WalletService;
+
   constructor(
     @Inject(AUTH_REPOSITORY) private readonly authRepository: AuthRepository,
     private readonly passwordService: PasswordService,
@@ -61,6 +66,17 @@ export class AuthService {
     const user = await this.authRepository.createUser({ email: input.email, passwordHash });
 
     await this.profiles.getOrCreate(user.id);
+    // Initial SkillPoints are credited through the wallet ledger, never by directly updating Profile.skillPoints.
+    // The stable key prevents duplicate grants if registration orchestration is retried.
+    if (this.wallet) {
+      await this.wallet.credit(
+        user.id,
+        100,
+        'Welcome bonus for creating a TalentSwap account',
+        undefined,
+        user.id,
+      );
+    }
     this.logger.log(`User registered: ${user.id}`);
 
     return this.issueSession(user);

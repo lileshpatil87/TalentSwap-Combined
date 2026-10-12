@@ -21,7 +21,7 @@ Access tokens are memory-only. The refresh-token strategy remains cookie-based a
 
 ## Runnable frontend-only mode
 
-The frontend attempts live API calls first. If the backend is unreachable and `NEXT_PUBLIC_DEMO_FALLBACK=true`, read surfaces use the bundled demo dataset so the UI can still be exercised. Mutating operations are disabled when they would create a false persisted state.
+The frontend attempts live API calls first. Demo fallback is disabled by default and may be enabled only for non-production public/read-only surfaces. Authenticated account pages never replace real account data with demo data.
 
 For production/staging, set:
 

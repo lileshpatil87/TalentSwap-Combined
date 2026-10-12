@@ -488,7 +488,7 @@ The API is versioned via URL path prefix (`/api/v1/`, `/api/v2/`). Header-based 
 | Skills        | `GET /skills` (search + filter), `POST /skills`, `GET /skills/:id`, `PATCH /skills/:id`, `DELETE /skills/:id`                                                                    |
 | Matches       | `GET /matches/suggestions` (AI-ranked), `POST /matches/connect/:userId`                                                                                                          |
 | Transactions  | `POST /transactions`, `GET /transactions/:id`, `POST /transactions/:id/confirm`, `POST /transactions/:id/dispute`, `GET /transactions/history`                                   |
-| Wallet        | `GET /wallet/balance`, `GET /wallet/ledger`, `POST /wallet/purchase-points`                                                                                                      |
+| Wallet        | `GET /wallet/balance`, `GET /wallet/ledger`                                                                                                      |
 | Storage       | `POST /storage/presign`, `POST /storage/confirm`, `DELETE /storage/:key`                                                                                                         |
 | Documents     | `GET /documents` (admin), `PATCH /documents/:id/review` (admin)                                                                                                                  |
 | Chat          | `GET /conversations`, `POST /conversations`, `GET /conversations/:id/messages`                                                                                                   |
@@ -600,7 +600,7 @@ talentswap-backend/
 │   │   ├── users/                # UserModule: CRUD, profile, role management
 │   │   ├── skills/               # SkillModule: listings, search, categories
 │   │   ├── transactions/         # TransactionModule: escrow, confirmation, ledger
-│   │   ├── wallet/               # WalletModule: balance, ledger history, point purchase
+│   │   ├── wallet/               # WalletModule: balance and ledger history
 │   │   ├── matching/             # MatchingModule: AI-powered suggestions endpoint
 │   │   ├── chat/                 # ChatModule: conversations, messages, WebSocket gateway
 │   │   ├── calling/              # CallingModule: Agora token generation, call records
@@ -649,7 +649,7 @@ talentswap-backend/
 | Analytics              | PostHog (self-hostable product analytics; funnels, session replay, feature flags; GDPR-compliant); alternative: Mixpanel                                                                  |
 | Uptime Monitoring      | BetterUptime or UptimeRobot — HTTP health check probes with on-call alerting; PagerDuty integration for production incidents                                                              |
 | AI / Embeddings        | OpenAI text-embedding-3-small model for skill semantic similarity matching; stored as pgvector (PostgreSQL extension) for efficient vector similarity queries                             |
-| Payment Processing     | Stripe (for optional SkillPoints purchase — users can buy points with real currency; Stripe handles PCI compliance)                                                                       |
+| Payment Processing     | No payment processor: SkillPoints cannot be purchased with real currency                                                                       |
 | Rate Limiting (Edge)   | Cloudflare Rate Limiting rules — applied before traffic reaches the origin server, protecting against volumetric attacks and credential stuffing                                          |
 
 # 8. Security and Privacy Considerations
@@ -737,7 +737,7 @@ _Goal: Deepen engagement, build trust infrastructure, and introduce differentiat
 
 _Goal: Production-hardening, administrative maturity, and feature parity with a commercially competitive platform._
 
-- SkillPoints purchase: Stripe integration for buying points with real currency (optional premium revenue stream).
+- Real-money SkillPoints purchases are explicitly out of scope and must not be implemented.
 - Fraud detection: ML-based anomaly detection for unusual point accumulation, session inflation, and account takeover patterns. Automated flagging with admin review queue.
 - Content moderation: profanity filtering and image content moderation for chat messages and community posts (via OpenAI moderation API or AWS Rekognition).
 - Advanced admin dashboard: platform analytics (DAU, MAU, exchange volume, category trends), cohort analysis, moderation queue metrics.

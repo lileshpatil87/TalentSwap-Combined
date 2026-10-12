@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
@@ -13,6 +13,9 @@ import { AuthService, type AuthSessionResult } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { TokenService } from './token.service';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { PasswordResetService } from './password-reset.service';
 
 /**
  * `auth` module's sole controller (Backend Constitution §8 — "a module
@@ -36,6 +39,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly tokenService: TokenService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   @Public()
@@ -61,6 +65,29 @@ export class AuthController {
     const session = await this.authService.login(dto);
     this.setRefreshCookie(res, session);
     return this.toResponse(session);
+  }
+
+
+  @Public()
+  @RateLimit('auth')
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
+    try { return await this.passwordReset.request(dto.email); }
+    catch (error) {
+      if (error instanceof Error && error.message === 'PASSWORD_RESET_EMAIL_NOT_CONFIGURED') {
+        throw new ServiceUnavailableException('Password reset email delivery is not configured. Please contact the administrator.');
+      }
+      throw error;
+    }
+  }
+
+  @Public()
+  @RateLimit('auth')
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
+    return this.passwordReset.reset(dto.token, dto.password);
   }
 
   /**

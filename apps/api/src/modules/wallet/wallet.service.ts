@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { LedgerEntryType, Prisma } from '@prisma/client';
 import { WALLET_REPOSITORY } from './wallet.constants';
 import type { WalletRepository, WalletTransactionClient } from './wallet.repository';
 import { InsufficientBalanceException } from './wallet.exceptions';
@@ -20,11 +20,16 @@ export class WalletService {
     private readonly txHelper: TransactionHelper,
   ) {}
 
-  async getBalance(userId: string) { return { balance: await this.repo.latestBalance(userId) }; }
+  async getBalance(userId: string) {
+    const [available, pending] = await Promise.all([this.repo.latestBalance(userId), this.repo.pendingEscrow(userId)]);
+    return { balance: available + pending, available, pending, currencyLabel: 'Skill Points' };
+  }
 
   async ledger(userId: string, page = 1, limit = 20) {
-    const r = await this.repo.list(userId, page, limit);
-    return { ...r, page, limit, totalPages: Math.ceil(r.total / limit) };
+    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+    const safeLimit = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 20;
+    const r = await this.repo.list(userId, safePage, safeLimit);
+    return { ...r, page: safePage, limit: safeLimit, totalPages: Math.ceil(r.total / safeLimit) };
   }
 
   async credit(userId: string, amount: number, description: string, transactionId?: string, idempotencyKey?: string) { return this.apply(userId, 'CREDIT', amount, description, transactionId, idempotencyKey); }
@@ -33,8 +38,8 @@ export class WalletService {
   async release(userId: string, amount: number, description: string, transactionId?: string) { return this.apply(userId, 'ESCROW_RELEASE', amount, description, transactionId); }
   async adminAdjustment(userId: string, amount: number, description: string) { return this.apply(userId, 'ADMIN_ADJUSTMENT', amount, description); }
 
-  async withFinancialTransaction<T>(lockUserId: string, work: (ctx: LedgerAtomicContext) => Promise<T>): Promise<T> {
-    return this.txHelper.withAdvisoryLock(lockUserId, async (tx: Prisma.TransactionClient) => {
+  async withFinancialTransaction<T>(lockUserIds: string | string[], work: (ctx: LedgerAtomicContext) => Promise<T>): Promise<T> {
+    const run = async (tx: Prisma.TransactionClient) => {
       const ctx: LedgerAtomicContext = {
         tx,
         hold: (userId, amount, description, transactionId) => this.applyInTransaction(tx, userId, 'ESCROW_HOLD', amount, description, transactionId),
@@ -43,16 +48,20 @@ export class WalletService {
         release: (userId, amount, description, transactionId) => this.applyInTransaction(tx, userId, 'ESCROW_RELEASE', amount, description, transactionId),
       };
       return work(ctx);
-    }, { isolationLevel: 'Serializable' });
+    };
+    const options = { isolationLevel: 'Serializable' as const };
+    return Array.isArray(lockUserIds)
+      ? this.txHelper.withAdvisoryLocks(lockUserIds, run, options)
+      : this.txHelper.withAdvisoryLock(lockUserIds, run, options);
   }
 
-  private async apply(userId: string, type: any, amount: number, description: string, transactionId?: string, idempotencyKey?: string) {
+  private async apply(userId: string, type: LedgerEntryType, amount: number, description: string, transactionId?: string, idempotencyKey?: string) {
     this.validateAmount(amount);
     try { return await this.repo.mutate(userId, type, amount, description, transactionId, idempotencyKey); }
     catch (e) { if (e instanceof Error && e.message === 'INSUFFICIENT_BALANCE') throw new InsufficientBalanceException(); throw e; }
   }
 
-  private async applyInTransaction(tx: WalletTransactionClient, userId: string, type: any, amount: number, description: string, transactionId?: string) {
+  private async applyInTransaction(tx: WalletTransactionClient, userId: string, type: LedgerEntryType, amount: number, description: string, transactionId?: string) {
     this.validateAmount(amount);
     try { return await this.repo.mutateInTransaction(tx, userId, type, amount, description, transactionId); }
     catch (e) { if (e instanceof Error && e.message === 'INSUFFICIENT_BALANCE') throw new InsufficientBalanceException(); throw e; }

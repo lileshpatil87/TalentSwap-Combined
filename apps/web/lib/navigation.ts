@@ -99,6 +99,7 @@ export const secondaryNavItems: NavItem[] = [
     icon: Settings,
     module: "dashboard-shell",
   },
+
 ];
 
 export const adminNavItems: NavItem[] = [

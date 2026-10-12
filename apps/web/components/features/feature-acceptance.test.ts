@@ -22,7 +22,7 @@ describe("FE-03 → FE-19 contract adoption", () => {
   });
   it("calling uses approved WebRTC signalling events", () => {
     const source = fs.readFileSync(path.join(root, "calling", "CallingPage.tsx"), "utf8");
-    for (const event of ["call:offer", "call:answer", "call:ice-candidate", "call:end"]) expect(source).toContain(event);
+    for (const event of ["call:signal", "call:join", "call:peer-joined", "ice-candidate", "offer", "answer", "end"]) expect(source).toContain(event);
     expect(source).toContain("getUserMedia");
   });
 });

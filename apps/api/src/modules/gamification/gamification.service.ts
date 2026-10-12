@@ -51,4 +51,20 @@ export class GamificationService {
 
   badges() { return this.repo.badges(); }
   userBadges(userId: string) { return this.repo.userBadges(userId); }
+
+  async snapshot(userId: string) {
+    const profile = await this.profiles.getOrCreate(userId);
+    const xp = Number(profile.experiencePoints ?? 0);
+    const earned = await this.repo.userBadges(userId);
+    const earnedById = new Map(earned.map((entry: any) => [entry.badgeId, entry]));
+    const badges = await this.repo.badges();
+    const thresholds = [100, 300, 600, 1000];
+    const nextLevelXp = thresholds.find((threshold) => xp < threshold) ?? 1000;
+    const level = xp >= 1000 ? 5 : xp >= 600 ? 4 : xp >= 300 ? 3 : xp >= 100 ? 2 : 1;
+    const rank = await this.leaderboards.rankFor(userId, xp);
+    return {
+      level, xp, nextLevelXp, rank,
+      badges: badges.map((badge: any) => ({ id: badge.id, name: badge.name, description: badge.description, earned: earnedById.has(badge.id), earnedAt: earnedById.get(badge.id)?.awardedAt?.toISOString() })),
+    };
+  }
 }

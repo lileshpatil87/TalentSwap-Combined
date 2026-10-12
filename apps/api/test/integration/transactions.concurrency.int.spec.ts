@@ -40,10 +40,18 @@ describe('Transaction escrow concurrency integration', () => {
     })));
     const fulfilled = results.filter(r => r.status === 'fulfilled');
     expect(fulfilled).toHaveLength(10);
-    expect(await wallet.getBalance(initiator.id)).toEqual({ balance: 0 });
+    const balance = await wallet.getBalance(initiator.id);
+    // Escrow is still the user's property until settlement: it must be unavailable
+    // for new spending, but remains visible as pending rather than disappearing.
+    expect(balance.available).toBe(0);
+    expect(balance.pending).toBe(100);
+    expect(balance.balance).toBe(100);
+    expect(await prisma.transaction.count({ where: { initiatorId: initiator.id, status: 'ESCROW_HELD' } })).toBe(10);
 
-    await prisma.skillPointsLedger.deleteMany({ where: { userId: { in: [initiator.id, provider.id] } } });
+    // The wallet ledger references transactions with ON DELETE SET NULL. Delete
+    // test transactions first, then ledger rows and their parent records.
     await prisma.transaction.deleteMany({ where: { initiatorId: initiator.id } });
+    await prisma.skillPointsLedger.deleteMany({ where: { userId: { in: [initiator.id, provider.id] } } });
     await prisma.skill.delete({ where: { id: skill.id } });
     await prisma.skillCategory.delete({ where: { id: category.id } });
     await prisma.profile.deleteMany({ where: { userId: { in: [initiator.id, provider.id] } } });

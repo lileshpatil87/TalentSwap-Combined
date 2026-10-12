@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, type QueryKey, type UseMutationOptions, type UseQueryOptions } from "@tanstack/react-query";
 import { NetworkError, parseApiError } from "@/lib/api";
+import { isNetworkFallbackEnabled } from "@/lib/api/mode";
 
 export interface LiveQueryOptions<TData> {
   queryKey: QueryKey;
@@ -22,7 +23,7 @@ export function useLiveQuery<TData>({ queryKey, queryFn, fallback, enabled = tru
         setFallbackUsed(false);
         return data;
       } catch (error) {
-        if (fallback !== undefined && error instanceof NetworkError) {
+        if (fallback !== undefined && error instanceof NetworkError && isNetworkFallbackEnabled()) {
           setFallbackUsed(true);
           return typeof fallback === "function" ? (fallback as () => TData)() : fallback;
         }

@@ -1,1 +1,7 @@
-import { Module } from '@nestjs/common'; import { SkillsModule } from '../skills/skills.module'; import { SearchController } from './search.controller'; import { SearchService } from './search.service'; @Module({imports:[SkillsModule],controllers:[SearchController],providers:[SearchService],exports:[SearchService]}) export class SearchModule{}
+import { Module } from '@nestjs/common';
+import { CacheModule } from '@app/cache/cache.module';
+import { SearchController } from './search.controller';
+import { SearchService } from './search.service';
+
+@Module({ imports: [CacheModule], controllers: [SearchController], providers: [SearchService], exports: [SearchService] })
+export class SearchModule {}

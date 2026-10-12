@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info:
+  title: TalentSwap Public API
+  version: 1.0.0
+  description: Read-only developer API. Use an x-api-key issued in the authenticated developer API settings.
+servers:
+  - url: https://api.example.com/api/v1/public/v1
+security:
+  - ApiKeyAuth: []
+paths:
+  /skills:
+    get:
+      summary: Search public active skills
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200': { description: Public skill records }
+        '403': { description: Missing, invalid, expired, revoked, or insufficient-scope API key }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

@@ -1,0 +1,41 @@
+_format_version: "3.0"
+_transform: true
+services:
+  - name: talentswap-api
+    url: http://api:4000
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 2
+    routes:
+      - name: talentswap-api-v1
+        paths: [/api/v1, /docs]
+        strip_path: false
+        preserve_host: true
+      - name: talentswap-realtime-socketio
+        paths: [/socket.io]
+        strip_path: false
+        preserve_host: true
+plugins:
+  - name: rate-limiting
+    config:
+      minute: 300
+      hour: 10000
+      policy: redis
+      limit_by: ip
+      redis_host: redis
+      redis_port: 6379
+      redis_timeout: 2000
+      fault_tolerant: true
+      hide_client_headers: false
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10
+      size_unit: megabytes
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true

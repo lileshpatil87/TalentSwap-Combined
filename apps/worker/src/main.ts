@@ -1,13 +1,22 @@
 import 'dotenv/config';
 import { Worker } from 'bullmq';
 import Redis from 'ioredis';
-import net from 'node:net';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { PrismaClient } from '@prisma/client';
+import { MAX_DOCUMENT_BYTES, scanBufferWithClamAv } from './reliability';
 
 const prisma = new PrismaClient();
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 const publisher = new Redis(redisUrl, { maxRetriesPerRequest: null });
+const storageBucket = process.env.R2_BUCKET ?? 'talentswap';
+const storage = new S3Client({
+  region: 'auto',
+  ...(process.env.R2_ENDPOINT ? { endpoint: process.env.R2_ENDPOINT } : {}),
+  ...(process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
+    ? { credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } }
+    : {}),
+});
 
 async function embed(text: string): Promise<number[]> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -20,6 +29,7 @@ async function embed(text: string): Promise<number[]> {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model, input: text }),
+        signal: AbortSignal.timeout(30_000),
       });
       if (!response.ok) throw new Error(`EMBEDDING_PROVIDER_${response.status}`);
       const json = await response.json() as any;
@@ -28,89 +38,133 @@ async function embed(text: string): Promise<number[]> {
       return vector;
     } catch (error) {
       last = error;
-      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500 * (2 ** attempt)));
     }
   }
   throw last instanceof Error ? last : new Error('EMBEDDING_PROVIDER_FAILURE');
 }
 
-async function scanWithClamAv(downloadUrl: string): Promise<{ clean: boolean; signature?: string }> {
-  const host = process.env.CLAMAV_HOST ?? 'localhost';
-  const port = Number(process.env.CLAMAV_PORT ?? 3310);
-  const response = await fetch(downloadUrl);
-  if (!response.ok) throw new Error(`OBJECT_DOWNLOAD_${response.status}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-
-  return new Promise((resolve, reject) => {
-    const socket = net.createConnection({ host, port });
-    const chunksOut: Buffer[] = [];
-    let settled = false;
-    const finish = (fn: () => void) => { if (!settled) { settled = true; fn(); socket.destroy(); } };
-    socket.setTimeout(30_000);
-    socket.on('connect', () => {
-      socket.write('zINSTREAM\0');
-      const chunkSize = 64 * 1024;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        const header = Buffer.alloc(4); header.writeUInt32BE(chunk.length, 0);
-        socket.write(header); socket.write(chunk);
-      }
-      const end = Buffer.alloc(4); end.writeUInt32BE(0, 0); socket.write(end);
-    });
-    socket.on('data', d => chunksOut.push(Buffer.from(d)));
-    socket.on('end', () => {
-      const result = Buffer.concat(chunksOut).toString('utf8').trim();
-      if (result.endsWith('OK')) finish(() => resolve({ clean: true }));
-      else if (result.startsWith('stream:')) finish(() => resolve({ clean: false, signature: result }));
-      else finish(() => reject(new Error(`CLAMAV_ERROR:${result}`)));
-    });
-    socket.on('timeout', () => finish(() => reject(new Error('CLAMAV_TIMEOUT'))));
-    socket.on('error', err => finish(() => reject(err)));
-  });
+async function downloadDocument(fileKey: string): Promise<Buffer> {
+  if (!fileKey || fileKey.includes('..') || fileKey.startsWith('/')) throw new Error('INVALID_DOCUMENT_KEY');
+  const result = await storage.send(new GetObjectCommand({ Bucket: storageBucket, Key: fileKey }));
+  const size = result.ContentLength ?? 0;
+  if (!Number.isInteger(size) || size <= 0 || size > MAX_DOCUMENT_BYTES) {
+    (result.Body as any)?.destroy?.();
+    throw new Error('INVALID_OBJECT_SIZE');
+  }
+  if (!result.Body) throw new Error('EMPTY_OBJECT');
+  const bytes = Buffer.from(await result.Body.transformToByteArray());
+  if (bytes.length !== size || bytes.length > MAX_DOCUMENT_BYTES) throw new Error('OBJECT_SIZE_MISMATCH');
+  return bytes;
 }
 
+
 const documentWorker = new Worker('document-scan', async job => {
-  if (job.name !== 'scan') return;
+  if (job.name !== 'scan') throw new Error(`UNSUPPORTED_DOCUMENT_JOB:${job.name}`);
   const document = await prisma.document.findUnique({ where: { id: job.data.documentId } });
   if (!document) return;
   try {
-    const scan = await scanWithClamAv(job.data.downloadUrl);
+    const fileKey = String(job.data.fileKey ?? '');
+    if (!fileKey.startsWith('users/')) throw new Error('INVALID_DOCUMENT_KEY');
+    const bytes = await downloadDocument(fileKey);
+    const scan = await scanBufferWithClamAv(bytes);
     if (!scan.clean) {
       await prisma.document.update({ where: { id: document.id }, data: { status: 'REJECTED', scanResult: { engine: 'ClamAV', clean: false, signature: scan.signature } } });
       return;
     }
     await prisma.document.update({ where: { id: document.id }, data: { status: 'PENDING_REVIEW', scanResult: { engine: 'ClamAV', clean: true } } });
   } catch (error) {
-    await prisma.document.update({ where: { id: document.id }, data: { status: 'SCANNING', scanResult: { engine: 'ClamAV', error: error instanceof Error ? error.message : 'SCAN_FAILED' } } });
+    await prisma.document.update({ where: { id: document.id }, data: { status: 'SCANNING', scanResult: { engine: 'ClamAV', lastError: error instanceof Error ? error.message : 'SCAN_FAILED', retrying: true } } });
     throw error;
   }
 }, { connection, concurrency: 5 });
 
+async function openSearchRequest(path: string, init: RequestInit = {}) {
+  const base = (process.env.OPENSEARCH_URL ?? '').replace(/\/$/, '');
+  if (!base) throw new Error('OPENSEARCH_URL_NOT_CONFIGURED');
+  const headers = new Headers(init.headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  if (process.env.OPENSEARCH_USERNAME && process.env.OPENSEARCH_PASSWORD) {
+    headers.set('authorization', `Basic ${Buffer.from(`${process.env.OPENSEARCH_USERNAME}:${process.env.OPENSEARCH_PASSWORD}`).toString('base64')}`);
+  }
+  const response = await fetch(`${base}${path}`, { ...init, headers, signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error(`OPENSEARCH_HTTP_${response.status}:${(await response.text()).slice(0, 300)}`);
+  return response;
+}
+
+async function ensureOpenSearchIndex() {
+  const base = (process.env.OPENSEARCH_URL ?? '').replace(/\/$/, '');
+  if (!base) throw new Error('OPENSEARCH_URL_NOT_CONFIGURED');
+  const headers = new Headers();
+  if (process.env.OPENSEARCH_USERNAME && process.env.OPENSEARCH_PASSWORD) headers.set('authorization', `Basic ${Buffer.from(`${process.env.OPENSEARCH_USERNAME}:${process.env.OPENSEARCH_PASSWORD}`).toString('base64')}`);
+  const exists = await fetch(`${base}/talentswap-skills`, { method: 'HEAD', headers, signal: AbortSignal.timeout(10_000) });
+  if (exists.status === 404) {
+    await openSearchRequest('/talentswap-skills', { method: 'PUT', body: JSON.stringify({ mappings: { properties: { title: { type: 'text' }, description: { type: 'text' }, categoryId: { type: 'integer' }, category: { properties: { name: { type: 'text' }, slug: { type: 'keyword' } } }, ownerIsBanned: { type: 'boolean' }, profileVisibility: { type: 'keyword' }, proficiency: { type: 'keyword' }, type: { type: 'keyword' }, pointRate: { type: 'integer' }, updatedAt: { type: 'date' } } } }) });
+  } else if (!exists.ok) throw new Error(`OPENSEARCH_INDEX_CHECK_${exists.status}`);
+}
+
+async function indexSkill(skillId: string) {
+  const skill = await prisma.skill.findUnique({ where: { id: skillId }, include: { category: { select: { id: true, name: true, slug: true } }, user: { select: { id: true, isBanned: true, settings: { select: { profileVisibility: true } }, profile: { select: { displayName: true, headline: true, avatarUrl: true } } } } } });
+  if (!skill || !skill.isActive) {
+    await openSearchRequest(`/talentswap-skills/_doc/${encodeURIComponent(skillId)}`, { method: 'DELETE' }).catch((error: any) => { if (!String(error?.message).includes('OPENSEARCH_HTTP_404')) throw error; });
+    return { removed: skillId };
+  }
+  const { id, title, description, categoryId, category, proficiency, type, pointRate, updatedAt, user } = skill;
+  await openSearchRequest(`/talentswap-skills/_doc/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title, description, categoryId, category, proficiency, type, pointRate, updatedAt: updatedAt.toISOString(), ownerIsBanned: user.isBanned, profileVisibility: user.settings?.profileVisibility ?? 'PRIVATE', owner: { id: user.id, profile: user.profile } }) });
+  return { indexed: id };
+}
+
 const searchWorker = new Worker('search-sync', async job => {
-  if (job.name === 'skill-upsert') {
-    const skill = await prisma.skill.findUnique({ where: { id: job.data.skillId }, select: { id: true, isActive: true } });
-    if (skill?.isActive) await prisma.$executeRawUnsafe(`UPDATE skills SET title = title WHERE id = $1::uuid`, skill.id);
-    return { processed: Boolean(skill) };
+  if (job.name === 'index') {
+    if ((process.env.SEARCH_BACKEND ?? 'postgres') !== 'opensearch') return { skipped: true, reason: 'POSTGRES_SEARCH_ACTIVE' };
+    await ensureOpenSearchIndex();
+    return indexSkill(String(job.data.skillId));
   }
-  if (job.name === 'rebuild') {
-    const result = await prisma.$executeRawUnsafe(`UPDATE skills SET title = title WHERE is_active = true`);
-    return { rebuilt: Number(result) };
+  if (job.name === 'delete') {
+    if ((process.env.SEARCH_BACKEND ?? 'postgres') !== 'opensearch') return { skipped: true, reason: 'POSTGRES_SEARCH_ACTIVE' };
+    await ensureOpenSearchIndex();
+    return indexSkill(String(job.data.skillId));
   }
-  return { skipped: true };
-}, { connection, concurrency: 2 });
+  if (job.name !== 'rebuild') throw new Error(`UNSUPPORTED_SEARCH_JOB:${job.name}`);
+  const counts = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*)::bigint AS count FROM skills WHERE is_active = true`);
+  if ((process.env.SEARCH_BACKEND ?? 'postgres') === 'opensearch') {
+    await ensureOpenSearchIndex();
+    let cursor: string | undefined; let indexed = 0;
+    while (true) {
+      const batch = await prisma.skill.findMany({ where: { isActive: true }, take: 250, ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}), orderBy: { id: 'asc' }, include: { category: { select: { id: true, name: true, slug: true } }, user: { select: { id: true, isBanned: true, settings: { select: { profileVisibility: true } }, profile: { select: { displayName: true, headline: true, avatarUrl: true } } } } } });
+      if (!batch.length) break;
+      const lines = batch.flatMap(skill => { const { id, title, description, categoryId, category, proficiency, type, pointRate, updatedAt, user } = skill; return [JSON.stringify({ index: { _index: 'talentswap-skills', _id: id } }), JSON.stringify({ title, description, categoryId, category, proficiency, type, pointRate, updatedAt: updatedAt.toISOString(), ownerIsBanned: user.isBanned, profileVisibility: user.settings?.profileVisibility ?? 'PRIVATE', owner: { id: user.id, profile: user.profile } })]; });
+      const response = await openSearchRequest('/_bulk', { method: 'POST', headers: { 'content-type': 'application/x-ndjson' }, body: `${lines.join('\n')}\n` });
+      const result = await response.json() as any; if (result.errors) throw new Error('OPENSEARCH_BULK_REBUILD_CONTAINS_ERRORS');
+      indexed += batch.length; cursor = batch[batch.length - 1].id; if (batch.length < 250) break;
+    }
+    return { rebuilt: indexed, index: 'talentswap-skills', backend: 'opensearch' };
+  }
+  await prisma.$executeRawUnsafe(`REINDEX INDEX CONCURRENTLY skills_search_vector_gin_idx`);
+  return { rebuilt: Number(counts[0]?.count ?? 0), index: 'skills_search_vector_gin_idx', backend: 'postgres' };
+}, { connection, concurrency: 1 });
 
 const embeddingWorker = new Worker('skill-embeddings', async job => {
-  if (job.name !== 'skill-embed') return;
-  const skill = await prisma.skill.findUnique({ where: { id: job.data.skillId }, select: { id: true, isActive: true, title: true, description: true } });
-  if (!skill || !skill.isActive) return;
-  const vector = await embed(job.data.text ?? `${skill.title}\n${skill.description}`);
+  if (job.name !== 'skill-embed') throw new Error(`UNSUPPORTED_EMBEDDING_JOB:${job.name}`);
+  const skill = await prisma.skill.findUnique({ where: { id: job.data.skillId }, select: { id: true, isActive: true, title: true, description: true, updatedAt: true } });
+  if (!skill || !skill.isActive) return { skipped: true };
+  // Always embed the latest committed source text; queued payloads can be stale
+  // when edits are made rapidly and jobs complete out of order.
+  const vector = await embed(`${skill.title}\n${skill.description}`);
   const encoded = `[${vector.join(',')}]`;
-  await prisma.$executeRawUnsafe(`UPDATE skills SET embedding = $1::vector WHERE id = $2::uuid`, encoded, skill.id);
-  return { embedded: skill.id };
+  // Conditional update prevents an older, slower embedding request from
+  // overwriting the vector after a newer skill edit has committed.
+  const updated = await prisma.$executeRawUnsafe(
+    `UPDATE skills SET embedding = $1::vector WHERE id = $2::uuid AND updated_at = $3 AND is_active = true`,
+    encoded,
+    skill.id,
+    skill.updatedAt,
+  );
+  return Number(updated) === 1 ? { embedded: skill.id } : { skipped: true, reason: 'SKILL_CHANGED_DURING_EMBEDDING' };
 }, { connection, concurrency: 2 });
 
 const gamificationWorker = new Worker('gamification', async job => {
-  if (job.name !== 'award-xp') return;
+  if (job.name !== 'award-xp') throw new Error(`UNSUPPORTED_GAMIFICATION_JOB:${job.name}`);
   const { userId, xp, reason } = job.data as { userId: string; xp: number; reason: string };
   if (!Number.isInteger(xp) || xp <= 0) throw new Error('INVALID_XP_JOB');
   return prisma.$transaction(async tx => {
@@ -132,32 +186,70 @@ const gamificationWorker = new Worker('gamification', async job => {
 }, { connection, concurrency: 5 });
 
 const notificationWorker = new Worker('notifications', async job => {
-  if (job.name !== 'persist') return;
-  const { userId, type, payload } = job.data;
-  const result = await prisma.$transaction(async tx => {
-    try {
-      await tx.workerJobReceipt.create({ data: { jobId: `${job.queueName}:${job.id}`, queueName: job.queueName } });
-    } catch (error: any) {
-      if (error?.code === 'P2002') return { duplicate: true as const };
-      throw error;
-    }
-    const notification = await tx.notification.create({ data: { userId, type, payload } });
-    return { duplicate: false as const, notification };
-  });
-  if (!result.duplicate) await publisher.publish('talentswap:notifications:delivered', JSON.stringify({ userId, notification: result.notification }));
-  return result.duplicate ? result : result.notification.id;
+  if (job.name !== 'persist') throw new Error(`UNSUPPORTED_NOTIFICATION_JOB:${job.name}`);
+  const { userId, type, payload } = job.data as { userId: string; type: string; payload: unknown };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) throw new Error('INVALID_NOTIFICATION_USER_ID');
+  if (typeof type !== 'string' || !type.trim() || type.length > 100 || payload === undefined) throw new Error('INVALID_NOTIFICATION_PAYLOAD');
+  const jobId = `${job.queueName}:${job.id}`;
+  let notification: any = null;
+  try {
+    notification = await prisma.$transaction(async tx => {
+      const existing = await tx.workerJobReceipt.findUnique({ where: { jobId }, select: { resultId: true } });
+      if (existing) {
+        return existing.resultId ? tx.notification.findUnique({ where: { id: existing.resultId } }) : null;
+      }
+      await tx.workerJobReceipt.create({ data: { jobId, queueName: job.queueName } });
+      const created = await tx.notification.create({ data: { userId, type: type as any, payload: payload as any } });
+      await tx.workerJobReceipt.update({ where: { jobId }, data: { resultId: created.id } });
+      return created;
+    });
+  } catch (error: any) {
+    // A stalled-job duplicate can race the first processor. Read the committed
+    // receipt after the unique-key conflict, then re-publish the same record.
+    if (error?.code !== 'P2002') throw error;
+    const receipt = await prisma.workerJobReceipt.findUnique({ where: { jobId }, select: { resultId: true } });
+    notification = receipt?.resultId ? await prisma.notification.findUnique({ where: { id: receipt.resultId } }) : null;
+    if (!notification) throw error;
+  }
+  if (notification) await publisher.publish('talentswap:notifications:delivered', JSON.stringify({ userId, notification }));
+  return notification?.id ?? { duplicate: true };
 }, { connection, concurrency: 10 });
 
-for (const worker of [documentWorker, searchWorker, embeddingWorker, gamificationWorker, notificationWorker]) {
-  worker.on('failed', (job, error) => console.error(`[worker] ${worker.name} job ${job?.id} failed: ${error.message}`));
+const workers = [documentWorker, searchWorker, embeddingWorker, gamificationWorker, notificationWorker];
+for (const worker of workers) {
+  worker.on('failed', (job, error) => {
+    console.error(`[worker] queue=${worker.name} job=${job?.id ?? 'unknown'} attempts=${job?.attemptsMade ?? 0} error=${error.message}`);
+    if (worker === documentWorker && job?.name === 'scan' && job.data?.documentId) {
+      const maxAttempts = Number(job.opts.attempts ?? 1);
+      if (job.attemptsMade >= maxAttempts) {
+        void prisma.document.update({
+          where: { id: String(job.data.documentId) },
+          data: { status: 'SCAN_FAILED', scanResult: { engine: 'ClamAV', error: 'SCAN_RETRIES_EXHAUSTED', attempts: job.attemptsMade } },
+        }).catch(updateError => console.error(`[worker] failed to persist scan failure for document=${job.data.documentId}: ${updateError instanceof Error ? updateError.message : 'UNKNOWN'}`));
+      }
+    }
+  });
+  worker.on('error', error => console.error(`[worker] queue=${worker.name} error=${error.message}`));
 }
+connection.on('error', error => console.error(`[worker] redis connection error=${error.message}`));
+publisher.on('error', error => console.error(`[worker] redis publisher error=${error.message}`));
 
+let shuttingDown = false;
 async function shutdown() {
-  await Promise.all([documentWorker.close(), searchWorker.close(), embeddingWorker.close(), gamificationWorker.close(), notificationWorker.close()]);
-  await Promise.all([connection.quit(), publisher.quit(), prisma.$disconnect()]);
-  process.exit(0);
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log('[worker] graceful shutdown started');
+  try {
+    await Promise.all(workers.map(worker => worker.close()));
+    await Promise.allSettled([connection.quit(), publisher.quit(), prisma.$disconnect()]);
+    await storage.destroy();
+    process.exitCode = 0;
+  } catch (error) {
+    console.error(`[worker] shutdown error=${error instanceof Error ? error.message : 'UNKNOWN'}`);
+    process.exitCode = 1;
+  }
 }
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => void shutdown());
+process.on('SIGINT', () => void shutdown());
 
-console.log('TalentSwap worker started: document-scan, search-sync, skill-embeddings, gamification, notifications');
+console.log('TalentSwap worker started: document-scan, search-sync (PostgreSQL/OpenSearch), skill-embeddings, gamification, notifications');

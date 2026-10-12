@@ -8,7 +8,7 @@ CREATE TABLE "worker_job_receipts" (
 CREATE INDEX "worker_job_receipts_queue_name_processed_at_idx" ON "worker_job_receipts"("queue_name","processed_at");
 
 
--- Wallet purchase idempotency key. Transaction-scoped ledger rows keep their
--- existing transaction_id; standalone wallet purchases use this unique key.
+-- Wallet operation idempotency key. Transaction-scoped ledger rows keep their
+-- existing transaction_id; any authorized standalone ledger operation may use this key.
 ALTER TABLE "skill_points_ledger" ADD COLUMN "idempotency_key" UUID;
 CREATE UNIQUE INDEX "skill_points_ledger_idempotency_key_key" ON "skill_points_ledger"("idempotency_key");

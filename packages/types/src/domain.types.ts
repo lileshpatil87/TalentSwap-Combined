@@ -3,7 +3,7 @@ export type Id = string;
 export interface UserSummary {
   id: Id;
   name: string;
-  email: string;
+  email?: string;
   role: "USER" | "VERIFIED_USER" | "MODERATOR" | "ADMIN";
   avatar?: string;
   headline?: string;
@@ -19,6 +19,8 @@ export interface Profile extends UserSummary {
   timezone: string;
   languages: string[];
   joinedAt: string;
+  experienceLevel?: string;
+  experiencePoints?: number;
 }
 
 export interface Skill {
@@ -102,7 +104,7 @@ export interface DocumentItem {
   name: string;
   type: string;
   size: number;
-  status: "PENDING" | "UPLOADING" | "UNDER_REVIEW" | "VERIFIED" | "REJECTED";
+  status: "PENDING" | "UPLOADING" | "UNDER_REVIEW" | "SCAN_FAILED" | "VERIFIED" | "REJECTED";
   uploadedAt?: string;
   progress?: number;
 }

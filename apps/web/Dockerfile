@@ -35,6 +35,10 @@ CMD ["pnpm", "--filter", "@talentswap/web", "dev"]
 # Stage: build (self-hosted fallback path only — not used by Vercel)
 # ---------------------------------------------------------------------
 FROM deps AS build
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1
+ARG NEXT_PUBLIC_SOCKET_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 COPY . .
 RUN pnpm --filter=@talentswap/web... build
 

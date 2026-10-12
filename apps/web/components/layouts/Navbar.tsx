@@ -43,11 +43,11 @@ export function Navbar({ items, footerItems, homeHref, navLabel }: NavbarProps) 
   }, [pathname]);
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 lg:px-6">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border/80 bg-background/80 px-4 shadow-[0_4px_24px_-24px_hsl(var(--foreground)/0.4)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 lg:px-6">
       <MobileNav items={items} footerItems={footerItems} homeHref={homeHref} navLabel={navLabel} />
       <Link
         href={homeHref}
-        className="rounded-md text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
+        className="rounded-md text-sm font-bold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
       >
         TalentSwap
       </Link>

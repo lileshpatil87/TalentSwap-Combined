@@ -53,4 +53,4 @@ The ZIP therefore includes the complete Jest test suite and project scripts, plu
 
 ## Runtime modes
 
-`NEXT_PUBLIC_DEMO_FALLBACK=true` (default in `.env.example`) keeps the frontend runnable when the backend is unreachable by falling back to the existing demo dataset for read surfaces. Live API calls are attempted first. Set it to `false` in staging/production so backend outages surface as errors instead of demo data.
+`NEXT_PUBLIC_DEMO_FALLBACK=false` is the default. Demo fallback is optional for non-production public/read-only surfaces and is never used for authenticated account data.

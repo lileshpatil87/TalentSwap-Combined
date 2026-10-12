@@ -33,9 +33,9 @@ function SidebarLink({ item, active, collapsed }: SidebarLinkProps) {
       {...(active ? { "aria-current": "page" as const } : {})}
       {...(collapsed ? { title: item.label } : {})}
       className={cn(
-        "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         active
-          ? "bg-primary/10 text-primary"
+          ? "bg-primary/10 text-primary shadow-sm ring-1 ring-inset ring-primary/10"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
@@ -74,16 +74,16 @@ export function Sidebar({ items, footerItems, homeHref, backHref, backLabel, nav
   return (
     <div
       className={cn(
-        "hidden shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200 lg:flex",
+        "hidden shrink-0 flex-col border-r border-border/80 bg-background/90 shadow-[8px_0_32px_-28px_hsl(var(--foreground)/0.25)] backdrop-blur-xl transition-[width] duration-200 lg:flex",
         isCollapsed ? "w-16" : "w-64",
       )}
     >
-      <div className="flex h-16 items-center gap-2 border-b border-border px-4">
+      <div className="flex h-16 items-center gap-2 border-b border-border/80 px-4">
         <Link
           href={homeHref}
-          className="flex items-center gap-2 overflow-hidden rounded-md text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex items-center gap-2 overflow-hidden rounded-md text-sm font-bold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <Sparkles className="size-5 shrink-0 text-primary" aria-hidden="true" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"><Sparkles className="size-4" aria-hidden="true" /></span>
           {!isCollapsed && <span className="truncate">TalentSwap</span>}
         </Link>
       </div>

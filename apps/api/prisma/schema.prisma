@@ -124,6 +124,8 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   refreshTokens RefreshToken[]
+  settings UserSettings?
+  passwordResetTokens PasswordResetToken[]
   profile       Profile?
   skills        Skill[]
   initiatedTransactions Transaction[] @relation("TransactionInitiator")
@@ -141,6 +143,9 @@ model User {
   callsInitiated CallSession[]
   communityPosts CommunityPost[]
   adminLogs AdminLog[]
+  developerApiKeys DeveloperApiKey[]
+  governanceProposals GovernanceProposal[] @relation("GovernanceProposalAuthor")
+  governanceVotes GovernanceVote[]
 
   @@map("users")
 }
@@ -257,9 +262,17 @@ model Profile {
 
   displayName String @map("display_name") @db.VarChar(100)
 
+  headline String? @db.VarChar(120)
+
   bio String? @db.Text
 
   avatarUrl String? @map("avatar_url") @db.VarChar(500)
+
+  availability String? @db.VarChar(120)
+
+  timezone String? @db.VarChar(80)
+
+  languages String[] @default([])
 
   /// City/region granularity only — no precise coordinates are ever
   /// stored (Technology Specification §8.3 data-minimization).
@@ -375,6 +388,7 @@ enum LedgerEntryType {
 
 model SkillPointsLedger {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sequence BigInt @unique @default(autoincrement()) @map("sequence")
   userId String @map("user_id") @db.Uuid
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   transactionId String? @map("transaction_id") @db.Uuid
@@ -386,6 +400,7 @@ model SkillPointsLedger {
   description String @db.VarChar(255)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, sequence(sort: Desc)])
   @@index([transactionId])
   @@map("skill_points_ledger")
 }
@@ -417,6 +432,7 @@ model Transaction {
   provider User @relation("TransactionProvider", fields: [providerId], references: [id], onDelete: Restrict)
   skill Skill @relation(fields: [skillId], references: [id], onDelete: Restrict)
   ledgerEntries SkillPointsLedger[]
+  calls CallSession[]
   type TransactionType
   pointsHeld Int @map("points_held")
   status TransactionStatus @default(PENDING)
@@ -487,6 +503,7 @@ model Message {
 enum DocumentStatus {
   PENDING
   SCANNING
+  SCAN_FAILED
   PENDING_REVIEW
   APPROVED
   REJECTED
@@ -506,6 +523,7 @@ model Document {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   @@index([userId, status])
+  sizeBytes Int @default(0) @map("size_bytes")
   @@map("documents")
 }
 
@@ -587,6 +605,8 @@ model CallSession {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   initiatorId String @map("initiator_id") @db.Uuid
   initiator User @relation(fields: [initiatorId], references: [id], onDelete: Restrict)
+  transactionId String? @map("transaction_id") @db.Uuid
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   participantIds String[] @map("participant_ids")
   channelName String @map("channel_name") @db.VarChar(255)
   status CallStatus @default(RINGING)
@@ -594,6 +614,7 @@ model CallSession {
   endedAt DateTime? @map("ended_at") @db.Timestamptz(6)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   @@index([initiatorId, status])
+  @@index([transactionId, status])
   @@map("call_sessions")
 }
 
@@ -641,7 +662,97 @@ model WorkerJobReceipt {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   jobId String @unique @map("job_id") @db.VarChar(255)
   queueName String @map("queue_name") @db.VarChar(100)
+  resultId String? @map("result_id") @db.VarChar(255)
   processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
   @@index([queueName, processedAt])
   @@map("worker_job_receipts")
+}
+
+
+// === BE-26 user settings and password reset ===
+model UserSettings {
+  userId String @id @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailNotifications Boolean @default(true) @map("email_notifications")
+  messageNotifications Boolean @default(true) @map("message_notifications")
+  marketingEmails Boolean @default(false) @map("marketing_emails")
+  profileVisibility String @default("PUBLIC") @map("profile_visibility") @db.VarChar(20)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  @@map("user_settings")
+}
+
+model PasswordResetToken {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  usedAt DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+
+// === Phase 4 public developer API ===
+model DeveloperApiKey {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerUserId String @map("owner_user_id") @db.Uuid
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  name String @db.VarChar(100)
+  keyHash String @unique @map("key_hash") @db.VarChar(64)
+  scopes String[] @default([])
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([ownerUserId, createdAt(sort: Desc)])
+  @@index([revokedAt, expiresAt])
+  @@map("developer_api_keys")
+}
+
+enum GovernanceProposalStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  CLOSED
+  @@map("governance_proposal_status")
+}
+
+enum GovernanceVoteChoice {
+  YES
+  NO
+  ABSTAIN
+  @@map("governance_vote_choice")
+}
+
+// === Phase 4 decentralised governance ===
+model GovernanceProposal {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId String @map("author_id") @db.Uuid
+  author User @relation("GovernanceProposalAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  title String @db.VarChar(160)
+  description String @db.Text
+  status GovernanceProposalStatus @default(OPEN)
+  startsAt DateTime @default(now()) @map("starts_at") @db.Timestamptz(6)
+  endsAt DateTime @map("ends_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  votes GovernanceVote[]
+  @@index([status, endsAt])
+  @@index([authorId, createdAt(sort: Desc)])
+  @@map("governance_proposals")
+}
+
+model GovernanceVote {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId String @map("proposal_id") @db.Uuid
+  proposal GovernanceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  voterId String @map("voter_id") @db.Uuid
+  voter User @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  choice GovernanceVoteChoice
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@unique([proposalId, voterId])
+  @@index([voterId, createdAt(sort: Desc)])
+  @@map("governance_votes")
 }

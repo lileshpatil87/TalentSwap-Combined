@@ -33,6 +33,10 @@ import { CallingModule } from './modules/calling/calling.module';
 import { CommunityModule } from './modules/community/community.module';
 import { SearchModule } from './modules/search/search.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { DeveloperApiModule } from './modules/developer-api/developer-api.module';
+import { GovernanceModule } from './modules/governance/governance.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -69,6 +73,10 @@ import { AppService } from './app.service';
     CommunityModule,
     SearchModule,
     AdminModule,
+    SettingsModule,
+    DeveloperApiModule,
+    GovernanceModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [

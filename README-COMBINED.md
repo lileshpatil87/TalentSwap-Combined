@@ -62,7 +62,7 @@ Default URLs:
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
 
-The frontend has `NEXT_PUBLIC_DEMO_FALLBACK=true` by default, so read-only UI surfaces can display demo data when the API is unavailable. Set it to `false` when you want the UI to surface API outages instead of using demo data.
+Demo fallback is disabled by default. Authenticated account pages never substitute demo data for live user data. You may explicitly enable demo fallback for non-production public/read-only surfaces only.
 
 ## Useful commands
 

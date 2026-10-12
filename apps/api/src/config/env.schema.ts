@@ -34,6 +34,7 @@ export const envSchema = z.object({
 
   // --- Database ---
   DATABASE_URL: z.string().url({ message: 'DATABASE_URL must be a valid connection string' }),
+  DATABASE_READ_URL: z.string().url().optional().or(z.literal('')),
 
   // --- Redis ---
   REDIS_URL: z.string().url({ message: 'REDIS_URL must be a valid connection string' }),
@@ -78,8 +79,22 @@ export const envSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   AGORA_APP_ID: z.string().default(''),
   AGORA_APP_CERTIFICATE: z.string().default(''),
+
+  // --- Password-reset email delivery (optional locally; required to use reset flow) ---
+  RESEND_API_KEY: z.string().default(''),
+  EMAIL_FROM: z.string().default(''),
+  APP_PUBLIC_URL: z.string().url().default('http://localhost:3000'),
   CLAMAV_HOST: z.string().default('clamav'),
   CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+  SEARCH_BACKEND: z.enum(['postgres', 'opensearch']).default('postgres'),
+  OPENSEARCH_URL: z.string().url().optional().or(z.literal('')),
+  OPENSEARCH_USERNAME: z.string().default(''),
+  OPENSEARCH_PASSWORD: z.string().default(''),
+  SFU_SHARED_SECRET: z.string().default(''),
+  SFU_PUBLIC_URL: z.string().url().optional().or(z.literal('')),
+  SFU_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
+  POSTHOG_PROJECT_KEY: z.string().default(''),
+  POSTHOG_HOST: z.string().url().default('https://us.i.posthog.com'),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

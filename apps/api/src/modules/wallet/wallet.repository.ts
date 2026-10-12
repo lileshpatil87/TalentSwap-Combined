@@ -1,14 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@app/database/prisma.service';
 import { TransactionHelper } from '@app/database/transaction.helper';
-import type { Prisma } from '@prisma/client';
+import type { LedgerEntryType, Prisma } from '@prisma/client';
+import { DuplicateLedgerOperationException } from './wallet.exceptions';
 
 export type WalletTransactionClient = Prisma.TransactionClient;
 export interface WalletRepository {
   latestBalance(userId: string): Promise<number>;
+  pendingEscrow(userId: string): Promise<number>;
   list(userId: string, page: number, limit: number): Promise<{ items: any[]; total: number }>;
-  mutate(userId: string, type: any, amount: number, description: string, transactionId?: string, idempotencyKey?: string): Promise<any>;
-  mutateInTransaction(tx: WalletTransactionClient, userId: string, type: any, amount: number, description: string, transactionId?: string, idempotencyKey?: string): Promise<any>;
+  mutate(userId: string, type: LedgerEntryType, amount: number, description: string, transactionId?: string, idempotencyKey?: string): Promise<any>;
+  mutateInTransaction(tx: WalletTransactionClient, userId: string, type: LedgerEntryType, amount: number, description: string, transactionId?: string, idempotencyKey?: string): Promise<any>;
 }
 
 @Injectable()
@@ -17,33 +19,51 @@ export class PrismaWalletRepository implements WalletRepository {
 
   async latestBalance(userId: string) {
     const row = await this.prisma.skillPointsLedger.findFirst({
-      where: { userId }, orderBy: { createdAt: 'desc' }, select: { balanceAfter: true },
+      where: { userId }, orderBy: { sequence: 'desc' }, select: { balanceAfter: true },
     });
     return row?.balanceAfter ?? 0;
   }
 
+  async pendingEscrow(userId: string) {
+    const result = await this.prisma.transaction.aggregate({
+      where: { initiatorId: userId, status: { in: ['ESCROW_HELD', 'PROVIDER_CONFIRMED', 'RECIPIENT_CONFIRMED', 'DISPUTED'] } },
+      _sum: { pointsHeld: true },
+    });
+    return result._sum.pointsHeld ?? 0;
+  }
+
   async list(userId: string, page: number, limit: number) {
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.skillPointsLedger.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+      this.prisma.skillPointsLedger.findMany({ where: { userId }, orderBy: { sequence: 'desc' }, skip: (page - 1) * limit, take: limit }),
       this.prisma.skillPointsLedger.count({ where: { userId } }),
     ]);
     return { items, total };
   }
 
-  async mutate(userId: string, type: any, amount: number, description: string, transactionId?: string, idempotencyKey?: string) {
+  async mutate(userId: string, type: LedgerEntryType, amount: number, description: string, transactionId?: string, idempotencyKey?: string) {
     return this.txHelper.withAdvisoryLock(userId, (tx) => this.mutateInTransaction(tx, userId, type, amount, description, transactionId, idempotencyKey), { isolationLevel: 'Serializable' });
   }
 
-  async mutateInTransaction(tx: WalletTransactionClient, userId: string, type: any, amount: number, description: string, transactionId?: string, idempotencyKey?: string) {
+  async mutateInTransaction(tx: WalletTransactionClient, userId: string, type: LedgerEntryType, amount: number, description: string, transactionId?: string, idempotencyKey?: string) {
     if (transactionId) {
-      const existing = await tx.skillPointsLedger.findFirst({ where: { transactionId, entryType: type } });
-      if (existing) return existing;
+      const existing = await tx.skillPointsLedger.findFirst({ where: { userId, transactionId, entryType: type } });
+      if (existing) {
+        if (existing.amount !== amount) throw new DuplicateLedgerOperationException();
+        return existing;
+      }
     }
     if (idempotencyKey) {
       const existing = await tx.skillPointsLedger.findUnique({ where: { idempotencyKey } });
-      if (existing) return existing;
+      if (existing) {
+        const sameOperation = existing.userId === userId
+          && existing.entryType === type
+          && existing.amount === amount
+          && existing.transactionId === (transactionId ?? null);
+        if (!sameOperation) throw new DuplicateLedgerOperationException();
+        return existing;
+      }
     }
-    const last = await tx.skillPointsLedger.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { balanceAfter: true } });
+    const last = await tx.skillPointsLedger.findFirst({ where: { userId }, orderBy: { sequence: 'desc' }, select: { balanceAfter: true } });
     const balance = last?.balanceAfter ?? 0;
     const delta = type === 'CREDIT' || type === 'ESCROW_RELEASE' || type === 'ADMIN_ADJUSTMENT' ? amount : -amount;
     const next = balance + delta;

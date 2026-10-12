@@ -1,8 +1,8 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Role } from '@talentswap/types';
 import { USERS_REPOSITORY } from './users.constants';
 import type { UsersRepository, UserRecord, UserUpdateInput } from './users.repository';
-import { UserEmailConflictException, UserNotFoundException, UserOwnershipException } from './users.exceptions';
+import { BannedUserException, UserEmailConflictException, UserNotFoundException, UserOwnershipException } from './users.exceptions';
 
 @Injectable()
 export class UsersService {
@@ -16,18 +16,29 @@ export class UsersService {
 
   async getAuthenticatedUser(id: string): Promise<UserRecord> { return this.getById(id); }
 
-  async update(id: string, actorId: string, actorRole: Role, input: UserUpdateInput): Promise<UserRecord> {
-    if (actorId !== id && actorRole !== Role.ADMIN) throw new UserOwnershipException();
+  async getForActor(id: string, actorId: string, actorRole: Role): Promise<UserRecord> {
+    if (actorId !== id && actorRole !== Role.ADMIN) {
+      throw new UserOwnershipException();
+    }
+    return this.getById(id);
+  }
+
+  async update(id: string, _actorId: string, actorRole: Role, input: UserUpdateInput): Promise<UserRecord> {
+    // User-table fields are security-sensitive (role, ban status, verification,
+    // and email). They must never be changed through a self-service PATCH;
+    // email changes need a dedicated verification flow. Admin workflows
+    // additionally enforce Role.ADMIN at their route boundary.
+    if (actorRole !== Role.ADMIN) throw new UserOwnershipException();
     if (input.email) {
       const existing = await this.repository.findByEmail(input.email);
       if (existing && existing.id !== id) throw new UserEmailConflictException();
     }
-    const safeInput: UserUpdateInput = actorRole === Role.ADMIN ? input : (input.email ? { email: input.email } : {});
-    return this.repository.update(id, safeInput);
+    return this.repository.update(id, input);
   }
 
   async deactivate(id: string, actorId: string, actorRole: Role): Promise<void> {
     if (actorId !== id && actorRole !== Role.ADMIN) throw new UserOwnershipException();
+    if (actorId === id && actorRole === Role.ADMIN) throw new BadRequestException('Administrators cannot deactivate their own account.');
     await this.getById(id);
     await this.repository.delete(id);
   }
@@ -37,7 +48,7 @@ export class UsersService {
 
   async assertActive(id: string): Promise<UserRecord> {
     const user = await this.getById(id);
-    if (user.isBanned) throw new UserOwnershipException();
+    if (user.isBanned) throw new BannedUserException();
     return user;
   }
 }

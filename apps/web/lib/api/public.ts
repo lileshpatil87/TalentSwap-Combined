@@ -1,7 +1,15 @@
-import type { MatchSuggestion, Profile, Skill } from "@talentswap/types";
+import type { MatchSuggestion, Profile } from "@talentswap/types";
 import { apiRequest } from "@/lib/api";
+
+export interface PublicSkillRecord {
+  id: string; userId: string; title: string; description: string; category?: { name?: string } | null;
+  proficiency: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT"; pointRate: number; isActive: boolean; type: "OFFERING" | "SEEKING";
+}
+export interface PaginatedSkills { items: PublicSkillRecord[]; total: number; page: number; limit: number; totalPages: number; }
+
 export const publicApi = {
-  skills: (query = "") => apiRequest<Skill[]>(`/skills${query}`),
-  profile: (id: string) => apiRequest<Profile>(`/users/${id}`),
-  matches: () => apiRequest<MatchSuggestion[]>("/discover"),
+  skills: (query = "") => apiRequest<PaginatedSkills>(`/skills${query}`),
+  categories: () => apiRequest<Array<{ id: number; name: string }>>("/skills/categories"),
+  profile: (id: string) => apiRequest<Profile>(`/profiles/${encodeURIComponent(id)}`),
+  matches: () => apiRequest<MatchSuggestion[]>("/matches/suggestions"),
 };

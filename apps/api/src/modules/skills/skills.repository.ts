@@ -4,7 +4,6 @@ import { PrismaService } from '@app/database/prisma.service';
 export interface SkillsRepository {
   searchFullText(q: string, filters: any): Promise<{ items: any[]; total: number }>;
   similarByEmbedding(vector: number[], filters: any): Promise<any[]>;
-  rebuildSearchProjection(): Promise<number>;
   create(data: any): Promise<any>;
   findById(id: string): Promise<any>;
   list(args: any): Promise<{ items: any[]; total: number }>;
@@ -31,7 +30,7 @@ export class PrismaSkillsRepository implements SkillsRepository {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.skill.findMany({
         where,
-        include: { category: true },
+        include: { category: true, user: { select: { id: true, role: true, profile: { select: { displayName: true, headline: true, location: true, avatarUrl: true, reputationScore: true, totalExchanges: true, isVerified: true } } } } },
         orderBy: { createdAt: 'desc' },
         skip: (args.page - 1) * args.limit,
         take: args.limit,
@@ -95,16 +94,21 @@ export class PrismaSkillsRepository implements SkillsRepository {
     const categoryId = filters.categoryId ?? null;
     const type = filters.type ?? null;
     return this.prisma.$queryRawUnsafe<any[]>(
-      `SELECT id, user_id AS "userId", title, description, category_id AS "categoryId",
-              proficiency, type, point_rate AS "pointRate",
-              1 - (embedding <=> $1::vector) AS score
-         FROM skills
-        WHERE is_active = true
-          AND embedding IS NOT NULL
-          AND user_id <> $2::uuid
-          AND ($3::int IS NULL OR category_id = $3::int)
-          AND ($4::skill_type IS NULL OR type = $4::skill_type)
-        ORDER BY embedding <=> $1::vector, id
+      `SELECT s.id, s.user_id AS "userId", s.title, s.description, s.category_id AS "categoryId",
+              c.name AS category, s.proficiency, s.type, s.point_rate AS "pointRate",
+              p.display_name AS "userName", p.headline, p.location, p.avatar_url AS avatar,
+              p.reputation_score AS rating, p.total_exchanges AS "reviewCount", p.is_verified AS verified,
+              u.role, 1 - (s.embedding <=> $1::vector) AS score
+         FROM skills s
+         JOIN users u ON u.id = s.user_id
+         JOIN skill_categories c ON c.id = s.category_id
+         LEFT JOIN profiles p ON p.user_id = s.user_id
+        WHERE s.is_active = true
+          AND s.embedding IS NOT NULL
+          AND s.user_id <> $2::uuid
+          AND ($3::int IS NULL OR s.category_id = $3::int)
+          AND ($4::skill_type IS NULL OR s.type = $4::skill_type)
+        ORDER BY s.embedding <=> $1::vector, s.id
         LIMIT $5`,
       v,
       filters.userId,
@@ -114,13 +118,5 @@ export class PrismaSkillsRepository implements SkillsRepository {
     );
   }
 
-  async rebuildSearchProjection() {
-    // search_vector is a generated column. Re-writing the source text causes
-    // PostgreSQL to recompute the generated projection; the GIN index then
-    // receives the current generated value transactionally.
-    const result = await this.prisma.$executeRawUnsafe(
-      `UPDATE skills SET title = title WHERE is_active = true`,
-    );
-    return Number(result);
-  }
+
 }

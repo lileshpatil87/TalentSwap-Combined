@@ -94,7 +94,7 @@ To design, develop, and deploy a scalable, trustworthy, and inclusive digital pl
 
 ## 4.2 Boundaries and Limitations
 
-TalentSwap's core skill-exchange ecosystem is non-monetary and does not require financial payments, currency exchange, or tipping. However, optional SkillPoints purchases using real currency may be supported as a premium feature. The platform is limited to the exchange of skills, time, and knowledge; physical goods are explicitly out of scope. In its initial phase, the platform will operate within defined metropolitan areas before expanding nationally and then internationally. The platform explicitly disclaims the ability to replace certified professional services in regulated sectors such as medicine, law, or structural engineering, and will surface appropriate disclaimers at all relevant touchpoints.
+TalentSwap's skill-exchange ecosystem is non-monetary and does not support financial payments, currency exchange, tipping, or real-money SkillPoints purchases. The platform is limited to the exchange of skills, time, and knowledge; physical goods are explicitly out of scope. In its initial phase, the platform will operate within defined metropolitan areas before expanding nationally and then internationally. The platform explicitly disclaims the ability to replace certified professional services in regulated sectors such as medicine, law, or structural engineering, and will surface appropriate disclaimers at all relevant touchpoints.
 
 ## 4.3 Target Users and Audience
 
@@ -113,7 +113,7 @@ TalentSwap's core skill-exchange ecosystem is non-monetary and does not require 
 
 Rather than enforcing a rigid one-to-one barter — where User A must possess exactly what User B needs and vice versa at the same moment — TalentSwap adopts a flexible points-based economy as its medium of exchange. When a user provides a skill or service to another, they receive SkillPoints in proportion to the time and complexity of the session. These points accumulate in the user's digital wallet and can be redeemed at any time to access skills from any other user on the platform.
 
-This decoupling of giving and receiving is the platform's most important structural innovation. It enables asynchronous exchange — a user can teach coding today and use the accumulated points to access guitar lessons six months later — and it removes the primary matching bottleneck inherent in bilateral barter systems. Users who lack skills to offer but wish to access the platform may also purchase SkillPoints through a premium model, providing a sustainable revenue stream while preserving the community's non-monetary ethos for active contributors.
+This decoupling of giving and receiving is the platform's most important structural innovation. It enables asynchronous exchange — a user can teach coding today and use the accumulated points to access guitar lessons six months later — and it removes the primary matching bottleneck inherent in bilateral barter systems. SkillPoints are not sold for real money. Access to the platform is not tied to purchasing points.
 
 > **Core principle:** 1 hour of any skill exchange = 10 SkillPoints. Specialised or verified-expert sessions may carry a premium multiplier agreed upon by both parties.
 
@@ -239,7 +239,7 @@ Users continue to engage with the platform through the community board, skill-sh
 - **Transaction Integrity:** The centralised escrow-style transaction pool virtually eliminates the risk of incomplete or fraudulent exchanges, building systemic trust at scale.
 - **Quality Assurance:** The rating and feedback module creates a self-regulating quality system in which high-performing providers are surfaced and low-quality participants face natural attrition.
 - **Community Capital:** By prioritising local matching and community events, the platform generates measurable social capital — trust networks, civic engagement, and cross-disciplinary relationships — that strengthens communities beyond the digital realm.
-- **Sustainable Revenue:** Premium SkillPoints purchases, verified credential review fees, and enterprise community licences provide monetisation pathways that do not compromise the platform's core non-monetary ethos for active skill contributors.
+- **Sustainable Revenue:** The platform is designed to operate without charging users for SkillPoints or core skill-exchange functionality.
 - **Scalable Data Asset:** Anonymised exchange data provides valuable insights into community skill gaps, emerging learning trends, and regional talent distributions, creating a data asset of significant commercial and social research value.
 
 ---

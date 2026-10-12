@@ -380,7 +380,7 @@ Each sprint corresponds 1:1 to a Roadmap # from Section 2. "Sprint" here means a
 | **S15 — Search** | Formalized read-projection seam | DB-14, BE-16, TEST-16, INT-15 | S4, S2 | Low |
 | **S16 — Admin** | Moderation, ban/unban, dispute UI, analytics | DB-15, BE-17, FE-14, TEST-17, INT-16 | **All of S1–S15** | High — touches every module's guard surface |
 | **S17 — System Integration** | Full regression across all domains | INT-17 | S16 | Critical — last gate before deployment readiness |
-| **S18 — Hardening** | Stripe points purchase, fraud ML, content moderation, PWA, extraction seam prep | AI-04, AI-05, hardening tasks | S17 | Medium |
+| **S18 — Hardening** | Fraud prevention, content moderation, PWA, extraction seam prep | AI-04, AI-05, hardening tasks | S17 | Medium |
 | **S19 — Scaling** | Multi-region Postgres, Elasticsearch swap, API Gateway, mediasoup SFU | INFRA-08, DEPLOY-07 | S18, real usage data | High — infra complexity, cost |
 
 ---
@@ -412,7 +412,7 @@ Per AI SDLC §4 (locked), phases progress strictly in order — **Phase 3 (Featu
 
 Per Architecture §16 "Hardening phases" and Spec Phase 3/4:
 
-- Stripe integration inside `wallet` for SkillPoints purchase
+- Keep SkillPoints non-purchasable; do not add a payment integration for points.
 - ML-based fraud/anomaly detection (`AI-05`) added to wallet's velocity-check queue
 - Content moderation (`AI-04`) added to `chat`/`community`
 - PWA: service worker, offline caching, install prompt

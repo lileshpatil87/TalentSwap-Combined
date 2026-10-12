@@ -1,0 +1,10 @@
+{
+  "name": "@talentswap/mediasoup-sfu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone authenticated mediasoup SFU service for TalentSwap group calls",
+  "engines": { "node": ">=20 <21" },
+  "scripts": { "build": "tsc -p tsconfig.json", "start": "node dist/server.js", "dev": "tsx watch src/server.ts", "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": { "express": "^4.21.2", "helmet": "^8.0.0", "mediasoup": "^3.15.6", "socket.io": "^4.8.1" },
+  "devDependencies": { "@types/express": "^4.17.21", "@types/node": "^22.10.0", "tsx": "^4.19.2", "typescript": "^5.7.2" }
+}

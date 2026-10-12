@@ -23,6 +23,7 @@ export interface CorsConfig {
 
 export interface DatabaseConfig {
   url: string;
+  readUrl: string;
 }
 
 export interface RedisConfig {
@@ -52,6 +53,10 @@ export interface AuthConfig {
 export interface StorageConfig { endpoint?: string | undefined; bucket: string; accessKeyId: string; secretAccessKey: string; publicUrl?: string | undefined; }
 export interface AiConfig { apiKey: string; embeddingModel: string; }
 export interface AgoraConfig { appId: string; appCertificate: string; }
+export interface EmailConfig { resendApiKey: string; from: string; appPublicUrl: string; }
+export interface SearchConfig { backend: string; openSearchUrl: string; openSearchUsername: string; openSearchPassword: string; }
+export interface SfuConfig { sharedSecret: string; publicUrl: string; tokenTtlSeconds: number; }
+export interface AnalyticsConfig { posthogProjectKey: string; posthogHost: string; }
 
 export interface RootConfig {
   app: AppConfig;
@@ -63,6 +68,10 @@ export interface RootConfig {
   storage: StorageConfig;
   ai: AiConfig;
   agora: AgoraConfig;
+  email: EmailConfig;
+  search: SearchConfig;
+  sfu: SfuConfig;
+  analytics: AnalyticsConfig;
 }
 
 /**
@@ -105,6 +114,7 @@ export default (): RootConfig => ({
   },
   database: {
     url: process.env.DATABASE_URL ?? '',
+    readUrl: process.env.DATABASE_READ_URL ?? '',
   },
   redis: {
     url: process.env.REDIS_URL ?? '',
@@ -116,6 +126,10 @@ export default (): RootConfig => ({
   storage: { endpoint: process.env.R2_ENDPOINT, bucket: process.env.R2_BUCKET ?? 'talentswap', accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '', secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '', publicUrl: process.env.R2_PUBLIC_URL },
   ai: { apiKey: process.env.OPENAI_API_KEY ?? '', embeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small' },
   agora: { appId: process.env.AGORA_APP_ID ?? '', appCertificate: process.env.AGORA_APP_CERTIFICATE ?? '' },
+  email: { resendApiKey: process.env.RESEND_API_KEY ?? '', from: process.env.EMAIL_FROM ?? '', appPublicUrl: process.env.APP_PUBLIC_URL ?? 'http://localhost:3000' },
+  search: { backend: process.env.SEARCH_BACKEND ?? 'postgres', openSearchUrl: process.env.OPENSEARCH_URL ?? '', openSearchUsername: process.env.OPENSEARCH_USERNAME ?? '', openSearchPassword: process.env.OPENSEARCH_PASSWORD ?? '' },
+  sfu: { sharedSecret: process.env.SFU_SHARED_SECRET ?? '', publicUrl: process.env.SFU_PUBLIC_URL ?? '', tokenTtlSeconds: Number(process.env.SFU_TOKEN_TTL_SECONDS ?? 300) },
+  analytics: { posthogProjectKey: process.env.POSTHOG_PROJECT_KEY ?? '', posthogHost: (process.env.POSTHOG_HOST ?? 'https://us.i.posthog.com').replace(/\/$/, '') },
   auth: {
     jwtPrivateKey: normalizePem(process.env.JWT_PRIVATE_KEY ?? ''),
     jwtPublicKey: normalizePem(process.env.JWT_PUBLIC_KEY ?? ''),

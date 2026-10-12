@@ -37,6 +37,21 @@ export class TransactionHelper {
     }, options);
   }
 
+  /** Acquires multiple per-user locks in a stable order to avoid deadlocks. */
+  async withAdvisoryLocks<T>(
+    lockKeys: string[],
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: IsolationLevel; timeoutMs?: number; retries?: number },
+  ): Promise<T> {
+    const orderedKeys = [...new Set(lockKeys)].sort();
+    return this.withTransaction(async tx => {
+      for (const key of orderedKeys) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      }
+      return fn(tx);
+    }, options);
+  }
+
   private isRetryableSerializationFailure(error: unknown): boolean {
     const candidate = error as { code?: string; meta?: { code?: string }; message?: string };
     return candidate?.code === 'P2034'

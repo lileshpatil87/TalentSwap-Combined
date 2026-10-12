@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { S3Client, DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { StorageConfigurationException } from './storage.exceptions';
+import { StorageAccessException, StorageConfigurationException } from './storage.exceptions';
 
 const ALLOWED_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -76,6 +76,6 @@ export class StorageService {
   }
 
   private assertOwner(userId: string, key: string) {
-    if (!key.startsWith(`users/${userId}/`)) throw new Error('FORBIDDEN');
+    if (!key.startsWith(`users/${userId}/`)) throw new StorageAccessException();
   }
 }

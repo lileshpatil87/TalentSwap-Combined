@@ -42,7 +42,7 @@ for (const [feature, page] of Object.entries(featurePages)) {
 const chat = read(path.join(web,"components/features/chat/ChatPage.tsx"));
 for (const event of ["message:send","message:received"]) if (!chat.includes(event)) fail(`chat missing approved event ${event}`);
 const calling = read(path.join(web,"components/features/calling/CallingPage.tsx"));
-for (const event of ["call:offer","call:answer","call:ice-candidate","call:end"]) if (!calling.includes(event)) fail(`calling missing approved event ${event}`);
+for (const event of ["call:signal","call:join","call:peer-joined","ice-candidate","offer","answer","end"]) if (!calling.includes(event)) fail(`calling missing approved event ${event}`);
 if (!calling.includes("getUserMedia")) fail("calling missing browser media permission flow");
 const notifications = read(path.join(web,"components/features/notifications/NotificationsPage.tsx"));
 if (!notifications.includes("notification:new")) fail("notifications missing approved realtime event");

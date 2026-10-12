@@ -1,0 +1,102 @@
+# Optional scale profile: docker compose -f docker-compose.yml -f infrastructure/phase4/docker-compose.yml --profile scale up --build
+services:
+  api:
+    profiles: [scale]
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    env_file: [apps/api/.env, .env]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-talentswap_dev}?schema=public
+      DATABASE_READ_URL: ${DATABASE_READ_URL:-}
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+      SEARCH_BACKEND: ${SEARCH_BACKEND:-postgres}
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-http://opensearch:9200}
+      OPENSEARCH_USERNAME: ${OPENSEARCH_USERNAME:-}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:-}
+      SFU_SHARED_SECRET: ${SFU_SHARED_SECRET:?Set a 32+ character SFU_SHARED_SECRET in .env}
+      SFU_PUBLIC_URL: ${SFU_PUBLIC_URL:-http://localhost:4100}
+      POSTHOG_PROJECT_KEY: ${POSTHOG_PROJECT_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    expose: ["4000"]
+    restart: unless-stopped
+  worker:
+    profiles: [scale]
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    env_file: [apps/api/.env, .env]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-talentswap_dev}?schema=public
+      DATABASE_READ_URL: ${DATABASE_READ_URL:-}
+      REDIS_URL: redis://redis:6379
+      SEARCH_BACKEND: ${SEARCH_BACKEND:-postgres}
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-http://opensearch:9200}
+      OPENSEARCH_USERNAME: ${OPENSEARCH_USERNAME:-}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_BUCKET: ${R2_BUCKET:-talentswap}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+  web:
+    profiles: [scale]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runtime
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_SOCKET_URL: http://localhost:8000
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+    depends_on: [kong]
+    expose: ["3000"]
+    restart: unless-stopped
+  kong:
+    profiles: [scale]
+    image: kong:3.8
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+      KONG_ADMIN_LISTEN: "127.0.0.1:8001"
+      KONG_STATUS_LISTEN: "0.0.0.0:8100"
+      KONG_PLUGINS: bundled
+    ports: ["127.0.0.1:8000:8000", "127.0.0.1:8443:8443", "127.0.0.1:8100:8100"]
+    volumes: ["./infrastructure/phase4/kong/kong.yml:/kong/kong.yml:ro"]
+    depends_on: [api]
+    restart: unless-stopped
+  opensearch:
+    profiles: [scale]
+    image: opensearchproject/opensearch:2.17.1
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["127.0.0.1:9200:9200"]
+    volumes: ["opensearch-data:/usr/share/opensearch/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health | grep -Eq 'green|yellow'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+  mediasoup-sfu:
+    profiles: [scale]
+    build: { context: ./infrastructure/mediasoup-sfu }
+    environment:
+      PORT: 4100
+      SFU_SHARED_SECRET: ${SFU_SHARED_SECRET:?Set a 32+ character SFU_SHARED_SECRET in .env}
+      SFU_CORS_ORIGINS: ${CORS_ORIGIN:-http://localhost:3000}
+      SFU_LISTEN_IP: 0.0.0.0
+      SFU_ANNOUNCED_IP: ${SFU_ANNOUNCED_IP:-127.0.0.1}
+      SFU_MIN_PORT: 40000
+      SFU_MAX_PORT: 40100
+    ports: ["127.0.0.1:4100:4100", "127.0.0.1:40000-40100:40000-40100/udp", "127.0.0.1:40000-40100:40000-40100/tcp"]
+    restart: unless-stopped
+volumes:
+  opensearch-data:

@@ -62,7 +62,7 @@ Default URLs:
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
 
-The frontend has `NEXT_PUBLIC_DEMO_FALLBACK=true` by default, so read-only UI surfaces can display demo data when the API is unavailable. Set it to `false` when you want the UI to surface API outages instead of using demo data.
+Demo fallback is disabled by default. Authenticated account pages never substitute demo data for live user data. You may explicitly enable demo fallback for non-production public/read-only surfaces only.
 
 ## Useful commands
 
@@ -87,3 +87,6 @@ node scripts/verify-db-static.mjs
 ```
 
 For its live PostgreSQL/Prisma integration tests, follow `DB/README.md` and use its own `docker-compose.db.yml` only after stopping the root infrastructure stack. It is a separate migration contract until the documented schema conflict is reconciled.
+## Phase 4 scaling foundation
+
+See [`infrastructure/phase4/README.md`](infrastructure/phase4/README.md) for optional OpenSearch, Kong API Gateway, developer API, governance, mediasoup SFU, PostHog flags, multi-region database, and blue/green release setup. These services are opt-in and require deployment-specific secrets and live validation.

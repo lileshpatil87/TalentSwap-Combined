@@ -2,7 +2,7 @@
   "name": "talentswap",
   "private": true,
   "version": "0.0.0",
-  "description": "TalentSwap — points-based skill exchange platform. pnpm/Turborepo monorepo per Architecture Foundation v1.1 §2.",
+  "description": "TalentSwap \u2014 points-based skill exchange platform. pnpm/Turborepo monorepo per Architecture Foundation v1.1 \u00a72.",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
@@ -23,8 +23,12 @@
     "validate:frontend": "node scripts/validate-frontend.mjs",
     "validate:pwa": "node scripts/validate-pwa.mjs",
     "validate:sequence": "node scripts/validate-module-sequence.mjs",
-    "validate": "pnpm validate:sequence && pnpm validate:frontend && pnpm validate:pwa && pnpm validate:acceptance",
+    "validate": "pnpm validate:sequence && pnpm validate:frontend && pnpm validate:pwa && pnpm validate:acceptance && pnpm validate:phase1 && pnpm validate:phase2 && pnpm validate:phase3 && pnpm validate:phase4",
     "validate:acceptance": "node scripts/validate-acceptance.mjs",
+    "validate:phase1": "node scripts/validate-phase1.mjs",
+    "validate:phase2": "node scripts/validate-phase2.mjs",
+    "validate:phase3": "node scripts/validate-phase3.mjs",
+    "validate:phase4": "node scripts/validate-phase4.mjs",
     "test:source": "node scripts/test-source.mjs",
     "dev:web": "pnpm --filter @talentswap/web dev",
     "dev:api": "pnpm --filter @talentswap/api start:dev",
@@ -34,7 +38,10 @@
     "db:generate": "pnpm --filter @talentswap/api prisma:generate",
     "db:migrate": "pnpm --filter @talentswap/api prisma:migrate:deploy",
     "db:seed": "pnpm --filter @talentswap/api prisma:seed",
-    "db:setup": "pnpm db:generate && pnpm db:migrate && pnpm db:seed"
+    "db:setup": "pnpm db:generate && pnpm db:migrate && pnpm db:seed",
+    "validate:release": "node scripts/validate-release.mjs",
+    "smoke": "node scripts/smoke-test.mjs",
+    "phase5": "pnpm validate:release && pnpm typecheck && pnpm test && pnpm build"
   },
   "ts-node": {
     "project": "scripts/tsconfig.json",

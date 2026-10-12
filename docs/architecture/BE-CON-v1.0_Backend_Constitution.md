@@ -454,7 +454,7 @@ Implemented once as a decorator-based policy (`@RateLimit('auth')`), never re-im
 
 ## 46. Third-Party Integration Standards
 
-- Every third-party SDK (Agora, Resend, OpenAI, Stripe, ClamAV, R2) is wrapped in an **adapter class**, owned by the module that uses it: `calling/adapters/agora.adapter.ts`, `notifications/adapters/resend.adapter.ts`, `storage/adapters/r2.adapter.ts`, `matching/adapters/openai-embedding.adapter.ts` (Architecture Foundation §4.5).
+- Every third-party SDK (Agora, Resend, OpenAI, ClamAV, R2) is wrapped in an **adapter class**, owned by the module that uses it: `calling/adapters/agora.adapter.ts`, `notifications/adapters/resend.adapter.ts`, `storage/adapters/r2.adapter.ts`, `matching/adapters/openai-embedding.adapter.ts` (Architecture Foundation §4.5).
 - No controller and no business-logic service calls an external SDK directly, under any circumstance. This is what keeps a vendor swap (Resend → SendGrid, R2 → S3) a one-file change rather than a cross-codebase search-and-replace.
 
 ## 47. Security Best Practices
@@ -479,7 +479,7 @@ Restated in full from Architecture Foundation §13 as binding backend rules:
 | Staging | Doppler / Railway Secrets, mirroring production variable names exactly |
 | Production | AWS Secrets Manager (post-migration) / Railway Secrets (MVP); access restricted to the deploy pipeline identity only — no human reads production secrets directly |
 
-Never committed, anywhere, under any name: database URLs with credentials, JWT signing keys (RS256 private key especially), Agora/OpenAI/Stripe/Resend API keys, R2 access keys, ClamAV daemon connection strings (Architecture Foundation §8.4).
+Never committed, anywhere, under any name: database URLs with credentials, JWT signing keys (RS256 private key especially), Agora/OpenAI/Resend API keys, R2 access keys, ClamAV daemon connection strings (Architecture Foundation §8.4).
 
 ## 49. Performance Optimization Standards
 

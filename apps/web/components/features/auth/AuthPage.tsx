@@ -12,8 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert } from "@/components/ui/alert";
 import { useAuthStore } from "@/store/authStore";
 import { authApi } from "@/lib/api/auth";
-import { NetworkError, parseApiError } from "@/lib/api";
-import { isNetworkFallbackEnabled } from "@/lib/api/mode";
+import { parseApiError } from "@/lib/api";
 
 export function AuthPage({ mode }: { mode: "login" | "register" | "forgot" }) {
   const router = useRouter();
@@ -43,30 +42,32 @@ export function AuthPage({ mode }: { mode: "login" | "register" | "forgot" }) {
         setDone(true);
       } else if (mode === "login") {
         await auth.login({ email, password });
-        router.replace(new URLSearchParams(window.location.search).get("next") || "/dashboard");
+        const requestedNext = new URLSearchParams(window.location.search).get("next");
+        const safeNext = requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//") && !requestedNext.includes("\\")
+          ? requestedNext
+          : "/dashboard";
+        router.replace(safeNext);
       } else {
         await auth.register({ email, password });
         router.replace("/dashboard");
       }
     } catch (cause) {
-      if (cause instanceof NetworkError && isNetworkFallbackEnabled()) {
-        setError("The API is unavailable, so demo fallback is disabled for this request. Start the backend or enable NEXT_PUBLIC_DEMO_FALLBACK.");
-      } else setError(parseApiError(cause).message);
+      setError(parseApiError(cause).message);
     } finally { setLoading(false); }
   };
 
-  return <main className="flex min-h-dvh items-center justify-center bg-muted/20 px-4 py-10"><div className="w-full max-w-md">
-    <Link href="/" className="mb-6 flex items-center justify-center gap-2 font-semibold"><Sparkles className="size-5 text-primary"/>TalentSwap</Link>
-    <Card><CardHeader className="text-center"><CardTitle>{title}</CardTitle><CardDescription>{mode === "login" ? "Exchange what you know for what you want to learn." : mode === "register" ? "Join a community built around useful skill exchanges." : "Enter your email and we’ll send reset instructions."}</CardDescription></CardHeader>
-      <CardContent>{done ? <div className="space-y-4 text-center"><CheckCircle2 className="mx-auto size-10 text-success"/><p className="text-sm text-muted-foreground">If an account exists for {email}, reset instructions have been requested.</p><Button asChild className="w-full"><Link href="/login">Back to sign in</Link></Button></div> : <form onSubmit={(e) => { void submit(e); }} className="space-y-4" noValidate>
+  return <main className="auth-shell relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10"><div className="auth-decoration auth-decoration-one"/><div className="auth-decoration auth-decoration-two"/><div className="relative z-10 w-full max-w-md">
+    <Link href="/" className="mb-7 flex items-center justify-center gap-2.5 text-lg font-bold tracking-tight"><span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20"><Sparkles className="size-5"/></span>TalentSwap</Link>
+    <Card className="auth-card"><CardHeader className="px-7 pt-8 text-center sm:px-8"><div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-6"/></div><CardTitle>{title}</CardTitle><CardDescription>{mode === "login" ? "Exchange what you know for what you want to learn." : mode === "register" ? "Join a community built around useful skill exchanges." : "Enter your email and we’ll send reset instructions."}</CardDescription></CardHeader>
+      <CardContent className="px-7 pb-8 sm:px-8">{done ? <div className="space-y-4 text-center"><CheckCircle2 className="mx-auto size-10 text-success"/><p className="text-sm text-muted-foreground">If an account exists for {email}, reset instructions have been requested.</p><Button asChild className="w-full"><Link href="/login">Back to sign in</Link></Button></div> : <form onSubmit={(e) => { void submit(e); }} className="space-y-4" noValidate>
         <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required /></div>
         {mode !== "forgot" && <div className="space-y-2"><Label htmlFor="password">Password</Label><Input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} required /></div>}
         {mode === "register" && <div className="space-y-2"><Label htmlFor="confirm">Confirm password</Label><Input id="confirm" type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required /></div>}
         {error && <Alert className="border-destructive/30 text-destructive">{error}</Alert>}
         <Button className="w-full" disabled={loading}>{loading ? "Please wait…" : mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Send reset instructions"}<ArrowRight className="size-4"/></Button>
       </form>}
-      <div className="mt-5 flex flex-wrap justify-center gap-3 text-sm text-muted-foreground">{mode !== "login" && <Link className="hover:text-foreground" href="/login">Sign in</Link>}{mode !== "register" && <Link className="hover:text-foreground" href="/register">Create account</Link>}{mode !== "forgot" && <Link className="hover:text-foreground" href="/forgot-password">Forgot password?</Link>}</div>
+      <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">{mode !== "login" && <Link className="hover:text-foreground" href="/login">Sign in</Link>}{mode !== "register" && <Link className="hover:text-foreground" href="/register">Create account</Link>}{mode !== "forgot" && <Link className="hover:text-foreground" href="/forgot-password">Forgot password?</Link>}</div>
     </CardContent></Card>
-    <p className="mt-4 text-center text-xs text-muted-foreground">Live API first. If the API is unreachable and demo fallback is enabled, the app remains runnable with local demo data.</p>
+    <p className="mt-5 text-center text-xs leading-5 text-muted-foreground">Your account is created and authenticated by the TalentSwap server. If the server is unavailable, sign-in and registration will not create a fake account.</p>
   </div></main>;
 }

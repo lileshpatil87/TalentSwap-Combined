@@ -13,6 +13,7 @@ import type { AuthRepository, AuthUserRecord, RefreshTokenRecord } from './auth.
 import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
+import { ProfilesService } from '../profiles/profiles.service';
 
 function buildUser(overrides: Partial<AuthUserRecord> = {}): AuthUserRecord {
   return {
@@ -46,6 +47,7 @@ describe('AuthService', () => {
   let repository: jest.Mocked<AuthRepository>;
   let passwordService: jest.Mocked<PasswordService>;
   let tokenService: jest.Mocked<TokenService>;
+  let profiles: { getOrCreate: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -69,6 +71,7 @@ describe('AuthService', () => {
       generateRefreshToken: jest.fn(),
       hashRefreshToken: jest.fn(),
     } as unknown as jest.Mocked<TokenService>;
+    profiles = { getOrCreate: jest.fn().mockResolvedValue({ id: 'user-1' }) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -76,6 +79,7 @@ describe('AuthService', () => {
         { provide: AUTH_REPOSITORY, useValue: repository },
         { provide: PasswordService, useValue: passwordService },
         { provide: TokenService, useValue: tokenService },
+        { provide: ProfilesService, useValue: profiles },
       ],
     }).compile();
 
@@ -101,6 +105,7 @@ describe('AuthService', () => {
       });
 
       expect(passwordService.hash).toHaveBeenCalledWith('correct horse');
+      expect(profiles.getOrCreate).toHaveBeenCalledWith('user-1');
       expect(repository.createUser).toHaveBeenCalledWith({
         email: 'person@example.com',
         passwordHash: 'hashed-password',

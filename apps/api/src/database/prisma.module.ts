@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 
 import { DatabaseHealthIndicator } from './database-health.indicator';
 import { PrismaService } from './prisma.service';
+import { ReadReplicaService } from './read-replica.service';
 import { TransactionHelper } from './transaction.helper';
 
 /**
@@ -13,7 +14,7 @@ import { TransactionHelper } from './transaction.helper';
  */
 @Global()
 @Module({
-  providers: [PrismaService, TransactionHelper, DatabaseHealthIndicator],
-  exports: [PrismaService, TransactionHelper, DatabaseHealthIndicator],
+  providers: [PrismaService, ReadReplicaService, TransactionHelper, DatabaseHealthIndicator],
+  exports: [PrismaService, ReadReplicaService, TransactionHelper, DatabaseHealthIndicator],
 })
 export class PrismaModule {}

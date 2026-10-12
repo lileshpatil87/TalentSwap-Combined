@@ -5,6 +5,9 @@ import { PassportModule } from '@nestjs/passport';
 
 import type { AuthConfig } from '@app/config/configuration';
 import { ProfilesModule } from '../profiles/profiles.module';
+import { PrismaModule } from '@app/database/prisma.module';
+import { PasswordResetService } from './password-reset.service';
+import { WalletModule } from '../wallet/wallet.module';
 
 import { AUTH_REPOSITORY } from './auth.constants';
 import { AuthController } from './auth.controller';
@@ -34,6 +37,8 @@ import { TokenService } from './token.service';
 @Module({
   imports: [
     ProfilesModule,
+    PrismaModule,
+    WalletModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       useFactory: (configService: ConfigService) => {
@@ -55,6 +60,7 @@ import { TokenService } from './token.service';
   providers: [
     AuthService,
     PasswordService,
+    PasswordResetService,
     TokenService,
     JwtStrategy,
     { provide: AUTH_REPOSITORY, useClass: PrismaAuthRepository },

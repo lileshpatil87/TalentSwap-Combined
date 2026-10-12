@@ -42,7 +42,7 @@ TalentSwap is composed of five architectural layers, matching the Technology Spe
    PostgreSQL 16 (via Prisma) — durable relational + ledger data
    Redis 7                    — cache, Socket.io adapter, BullMQ queues
    Cloudflare R2               — object storage (documents, avatars, chat media)
-   External services           — Agora, Resend, OpenAI, Stripe, ClamAV (all accessed through dedicated adapters)
+   External services           — Agora, Resend, OpenAI, ClamAV (all accessed through dedicated adapters)
 ```
 
 ### 1.2 Architectural Style
@@ -231,7 +231,7 @@ These rules are absolute. A PR that violates any rule below fails review regardl
 
 ### 4.5 Backend ↔ External Services
 
-- Every third-party integration (Agora, Resend, OpenAI, Stripe, ClamAV) is wrapped in an **adapter class** owned by the module that uses it (e.g., `calling/adapters/agora.adapter.ts`, `notifications/adapters/resend.adapter.ts`). No controller or business-logic service calls an external SDK directly. This keeps vendor swaps (e.g., Resend → SendGrid, per Spec §7 alternatives) a one-file change.
+- Every third-party integration (Agora, Resend, OpenAI, ClamAV) is wrapped in an **adapter class** owned by the module that uses it (e.g., `calling/adapters/agora.adapter.ts`, `notifications/adapters/resend.adapter.ts`). No controller or business-logic service calls an external SDK directly. This keeps vendor swaps (e.g., Resend → SendGrid, per Spec §7 alternatives) a one-file change.
 
 ### 4.6 Realtime
 
@@ -455,7 +455,7 @@ Every app validates its environment at boot against a Zod schema (`apps/api/src/
 
 ### 8.4 Never Committed
 
-Database URLs with credentials, JWT signing keys (RS256 private key especially), Agora/OpenAI/Stripe/Resend API keys, R2 access keys, ClamAV daemon connection strings. `.gitignore` at the repo root blocks `.env`, `.env.*.local`, `*.pem`, `*.key` globally — not per-app, so a new app added later inherits the protection automatically.
+Database URLs with credentials, JWT signing keys (RS256 private key especially), Agora/OpenAI/Resend API keys, R2 access keys, ClamAV daemon connection strings. `.gitignore` at the repo root blocks `.env`, `.env.*.local`, `*.pem`, `*.key` globally — not per-app, so a new app added later inherits the protection automatically.
 
 ---
 
@@ -1089,7 +1089,7 @@ This roadmap sequences modules by **dependency order**, not by the Technology Sp
 
 ### Hardening phases (post module #16), aligned to Technology Specification Phases 3–4
 
-- **Payments extension:** Stripe integration inside `wallet` for SkillPoints purchase (Spec §Phase 3).
+- **Payments:** No real-money SkillPoints purchase flow is permitted; do not add a payment integration for points.
 - **Fraud detection:** ML-based anomaly detection job added to `wallet`'s velocity-check queue (Spec §8.1).
 - **Content moderation:** profanity/image moderation added to `chat` and `community` via an OpenAI moderation adapter.
 - **PWA:** service worker, offline caching, install prompt added to `apps/web` (Spec §Phase 3).

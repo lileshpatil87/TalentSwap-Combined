@@ -1,4 +1,4 @@
-import type { ApiEnvelope, ApiError } from "@talentswap/types";
+import type { ApiEnvelope, ApiError, AuthSessionResponse } from "@talentswap/types";
 
 import { env } from "@/lib/env";
 
@@ -42,9 +42,49 @@ export class NetworkError extends Error {
 }
 
 let accessTokenProvider: () => string | null = () => null;
+let accessTokenUpdater: (session: AuthSessionResponse) => void = () => undefined;
+let unauthorizedHandler: () => void = () => undefined;
+let refreshInFlight: Promise<string | null> | null = null;
 
-export function configureApiAuth(provider: () => string | null): void {
+export function configureApiAuth(
+  provider: () => string | null,
+  updateSession?: (session: AuthSessionResponse) => void,
+  onUnauthorized?: () => void,
+): void {
   accessTokenProvider = provider;
+  accessTokenUpdater = updateSession ?? (() => undefined);
+  unauthorizedHandler = onUnauthorized ?? (() => undefined);
+}
+
+function isAuthEndpoint(path: string): boolean {
+  return /^\/auth\/(login|register|refresh|logout|forgot-password|reset-password)(?:$|\?)/.test(path);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    let response: Response;
+    try {
+      response = await fetch(`${env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+    } catch {
+      // A network outage must not erase a session that may still be valid.
+      return null;
+    }
+
+    const envelope = await response.json().catch(() => null) as ApiEnvelope<AuthSessionResponse> | null;
+    if (!response.ok || !envelope?.success || !envelope.data?.accessToken || !envelope.data.user) {
+      if (response.status === 401 || response.status === 403) unauthorizedHandler();
+      return null;
+    }
+
+    accessTokenUpdater(envelope.data);
+    return envelope.data.accessToken;
+  })().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
 }
 
 export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
@@ -57,37 +97,35 @@ export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
  * Issues a request against `${NEXT_PUBLIC_API_BASE_URL}${path}` and
  * unwraps the standard success/error envelope (Arch §9.1/§9.2).
  *
- * Auth header injection is intentionally not wired yet — `auth` (FE-01 in
- * the Master Development Plan sense) is out of scope for this foundation
- * module. The single insertion point is marked below so the Auth module
- * adds it here, once, rather than every module reinventing it.
+ * Authentication is wired centrally: the current access token is injected,
+ * and one refresh attempt is made after an eligible 401 response. Feature
+ * modules must never implement their own fetch/auth refresh logic.
  */
 export async function apiRequest<TData>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<TData> {
-  const { body, raw, headers, ...rest } = options;
+  return executeApiRequest<TData>(path, options, true);
+}
 
-  // Built as a plain object and the `body` key only ever set when there's
-  // an actual value, rather than assigned `undefined` — under
-  // `exactOptionalPropertyTypes: true` (Arch §6.1), `RequestInit["body"]`
-  // (`BodyInit | null`, no `undefined` in DOM's lib types) rejects an
-  // explicit `undefined` even though the key itself is optional. Omitting
-  // the key entirely is the only spelling that satisfies both DOM's types
-  // and this project's strictness setting.
+async function executeApiRequest<TData>(
+  path: string,
+  options: ApiRequestOptions,
+  allowRefresh: boolean,
+): Promise<TData> {
+  const { body, raw, headers, ...rest } = options;
+  const token = accessTokenProvider();
   const init: RequestInit = {
     ...rest,
     headers: {
       ...(raw ? {} : { "Content-Type": "application/json" }),
-      ...(accessTokenProvider() ? { Authorization: `Bearer ${accessTokenProvider()}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
     credentials: "include",
   };
 
-  if (body !== undefined) {
-    init.body = raw ? (body as BodyInit) : JSON.stringify(body);
-  }
+  if (body !== undefined) init.body = raw ? (body as BodyInit) : JSON.stringify(body);
 
   let response: Response;
   try {
@@ -96,16 +134,16 @@ export async function apiRequest<TData>(
     throw new NetworkError(cause);
   }
 
+  // Refresh once on expired access tokens. Auth endpoints are excluded to
+  // avoid recursive refresh attempts during login/register/refresh/logout.
+  if (response.status === 401 && allowRefresh && token && !isAuthEndpoint(path)) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) return executeApiRequest<TData>(path, options, false);
+  }
+
   const envelope = (await response.json().catch(() => null)) as ApiEnvelope<TData> | null;
-
-  if (!envelope) {
-    throw new NetworkError(new Error(`Malformed response (status ${response.status})`));
-  }
-
-  if (!envelope.success) {
-    throw new ApiRequestError(response.status, envelope.error);
-  }
-
+  if (!envelope) throw new NetworkError(new Error(`Malformed response (status ${response.status})`));
+  if (!envelope.success) throw new ApiRequestError(response.status, envelope.error);
   return envelope.data;
 }
 

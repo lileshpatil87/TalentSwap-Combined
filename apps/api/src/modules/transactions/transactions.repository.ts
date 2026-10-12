@@ -34,7 +34,14 @@ export class PrismaTransactionsRepository {
   async history(userId: string, page: number, limit: number) {
     const where = { OR: [{ initiatorId: userId }, { providerId: userId }] };
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.transaction.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+      this.prisma.transaction.findMany({
+        where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit,
+        include: {
+          skill: { select: { title: true } },
+          initiator: { select: { id: true, email: true, role: true, createdAt: true, profile: { select: { displayName: true, headline: true, location: true, avatarUrl: true, reputationScore: true, totalExchanges: true, isVerified: true } } } },
+          provider: { select: { id: true, email: true, role: true, createdAt: true, profile: { select: { displayName: true, headline: true, location: true, avatarUrl: true, reputationScore: true, totalExchanges: true, isVerified: true } } } },
+        },
+      }),
       this.prisma.transaction.count({ where }),
     ]);
     return { items, total };
