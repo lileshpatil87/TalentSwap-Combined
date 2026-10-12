@@ -1,6 +1,6 @@
 services:
   # -------------------------------------------------------------------
-  # 1. NestJS Backend API Web Service
+  # 1. NestJS Backend API Web Service (100% FREE TIER)
   # -------------------------------------------------------------------
   - type: web
     name: talentswap-api
@@ -8,7 +8,6 @@ services:
     plan: free
     region: oregon
     buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter @talentswap/api... build
-    # Free tier does not support preDeployCommand, run migrate directly before starting
     startCommand: pnpm db:migrate && pnpm --filter @talentswap/api start:prod
     healthCheckPath: /health
     envVars:
@@ -24,7 +23,7 @@ services:
         fromDatabase:
           name: talentswap-db
           property: connectionString
-      # Enter your Redis URL (Render Redis or free Upstash Redis: rediss://default:...@...)
+      # Free Redis from Upstash (https://upstash.com) - rediss://default:...@...upstash.io:6379
       - key: REDIS_URL
         sync: false
       - key: JWT_ISSUER
@@ -47,7 +46,7 @@ services:
         sync: false
 
   # -------------------------------------------------------------------
-  # 2. Next.js Frontend Web Service
+  # 2. Next.js Frontend Web Service (100% FREE TIER)
   # -------------------------------------------------------------------
   - type: web
     name: talentswap-web
@@ -70,29 +69,8 @@ services:
       - key: NEXT_PUBLIC_SOCKET_URL
         sync: false
 
-  # -------------------------------------------------------------------
-  # 3. Background Worker (BullMQ tasks)
-  # Note: Background workers require at least a Starter plan ($7/mo)
-  # -------------------------------------------------------------------
-  - type: worker
-    name: talentswap-worker
-    runtime: node
-    plan: starter
-    region: oregon
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @talentswap/worker... build
-    startCommand: pnpm --filter @talentswap/worker start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: talentswap-db
-          property: connectionString
-      - key: REDIS_URL
-        sync: false
-
 # ---------------------------------------------------------------------
-# Managed PostgreSQL Database (Includes pgvector support)
+# Managed PostgreSQL Database (100% FREE TIER)
 # ---------------------------------------------------------------------
 databases:
   - name: talentswap-db
