@@ -8,8 +8,8 @@ services:
     plan: free
     region: oregon
     buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter @talentswap/api... build
-    preDeployCommand: pnpm db:migrate
-    startCommand: pnpm --filter @talentswap/api start:prod
+    # Free tier does not support preDeployCommand, run migrate directly before starting
+    startCommand: pnpm db:migrate && pnpm --filter @talentswap/api start:prod
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -24,11 +24,9 @@ services:
         fromDatabase:
           name: talentswap-db
           property: connectionString
+      # Enter your Redis URL (Render Redis or free Upstash Redis: rediss://default:...@...)
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: talentswap-redis
-          property: connectionString
+        sync: false
       - key: JWT_ISSUER
         value: talentswap-api
       - key: JWT_ACCESS_TOKEN_TTL_SECONDS
@@ -37,22 +35,16 @@ services:
         value: 30
       - key: BCRYPT_SALT_ROUNDS
         value: 12
-      # Set your RSA PEM strings in Render dashboard (or sync: false)
+      # RSA keys generated via scripts/generate-jwt-keys.ps1
       - key: JWT_PRIVATE_KEY
         sync: false
       - key: JWT_PUBLIC_KEY
         sync: false
-      # Cross-service URLs
+      # Public URL of your frontend (e.g. https://talentswap-web.onrender.com)
       - key: CORS_ORIGIN
-        fromService:
-          type: web
-          name: talentswap-web
-          property: url
+        sync: false
       - key: APP_PUBLIC_URL
-        fromService:
-          type: web
-          name: talentswap-web
-          property: url
+        sync: false
 
   # -------------------------------------------------------------------
   # 2. Next.js Frontend Web Service
@@ -71,20 +63,16 @@ services:
         value: production
       - key: NEXT_PUBLIC_DEMO_FALLBACK
         value: "false"
+      # Public URL of your API (e.g. https://talentswap-api.onrender.com/api/v1)
       - key: NEXT_PUBLIC_API_BASE_URL
-        fromService:
-          type: web
-          name: talentswap-api
-          property: url
-        valueTemplate: ${talentswap-api.url}/api/v1
+        sync: false
+      # Public URL of your Socket.io server (e.g. https://talentswap-api.onrender.com)
       - key: NEXT_PUBLIC_SOCKET_URL
-        fromService:
-          type: web
-          name: talentswap-api
-          property: url
+        sync: false
 
   # -------------------------------------------------------------------
-  # 3. Background Worker (BullMQ tasks) - Note: Worker requires Starter plan
+  # 3. Background Worker (BullMQ tasks)
+  # Note: Background workers require at least a Starter plan ($7/mo)
   # -------------------------------------------------------------------
   - type: worker
     name: talentswap-worker
@@ -101,10 +89,7 @@ services:
           name: talentswap-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: talentswap-redis
-          property: connectionString
+        sync: false
 
 # ---------------------------------------------------------------------
 # Managed PostgreSQL Database (Includes pgvector support)
@@ -112,16 +97,6 @@ services:
 databases:
   - name: talentswap-db
     databaseName: talentswap
-    user: postgres
+    user: talentswap
     plan: free
     region: oregon
-
-# ---------------------------------------------------------------------
-# Managed Redis (Cache, BullMQ, Socket.io Adapter)
-# Note: Render Redis starts on the Starter plan ($7/mo).
-# Alternatively, you can use a free Upstash Redis instance and set REDIS_URL.
-# ---------------------------------------------------------------------
-# - type: redis
-#   name: talentswap-redis
-#   plan: starter
-#   region: oregon
